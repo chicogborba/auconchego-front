@@ -35,13 +35,18 @@ Acesse: `http://localhost:5173`
 npm run build
 ```
 
-## 🌐 Deploy GitHub Pages
+## 🌐 Deploy
 
-O projeto já está configurado para deploy automático no GitHub Pages.
+### Vercel (Recomendado)
+Deploy automático conectando o repositório GitHub com a Vercel.
 
-**Importante:** Vá em Settings → Pages → Source e selecione **GitHub Actions**
+Acesse: `https://auconchego-front.vercel.app/`
 
-Após o push, acesse: `https://chicogborba.github.io/auconchego-front/`
+### GitHub Pages
+Para usar GitHub Pages, ajuste o `vite.config.ts`:
+```ts
+base: '/auconchego-front/'
+```
 
 ---
 
