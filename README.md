@@ -35,6 +35,14 @@ Acesse: `http://localhost:5173`
 npm run build
 ```
 
+## 🌐 Deploy GitHub Pages
+
+O projeto já está configurado para deploy automático no GitHub Pages.
+
+**Importante:** Vá em Settings → Pages → Source e selecione **GitHub Actions**
+
+Após o push, acesse: `https://chicogborba.github.io/auconchego-front/`
+
 ---
 
 **Auconchego** - Mais do que uma plataforma, uma rede de amor. 💛
