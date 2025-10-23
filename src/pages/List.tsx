@@ -2,20 +2,15 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import TopBar from '@/components/TopBar'
 import AdoptCard from '@/components/AdoptCard'
-import { petsData } from '@/data/petsData'
+import { usePets } from '@/contexts/PetsContext'
 import { Search } from 'lucide-react'
 
 export default function List() {
   const [searchTerm, setSearchTerm] = useState('')
+  const { pets } = usePets()
 
-  // Cria array com múltiplas repetições dos pets para ter ~30 cards
-  const basePets = Object.values(petsData)
-  const allPets = Array.from({ length: 10 }, (_, i) => 
-    basePets.map(pet => ({
-      ...pet,
-      id: pet.id + (i * 100), // IDs únicos para cada repetição
-    }))
-  ).flat()
+  // Usa os pets do contexto
+  const allPets = Object.values(pets)
 
   // Filtra os pets baseado na busca
   const filteredPets = allPets.filter(pet => {

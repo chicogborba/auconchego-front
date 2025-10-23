@@ -5,14 +5,15 @@ import LocationMap from '@/components/LocationMap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Heart, MapPin, Calendar, Ruler, Weight, Syringe, Scissors, Sparkles, Cat, Dog } from 'lucide-react'
-import { petsData } from '@/data/petsData'
+import { usePets } from '@/contexts/PetsContext'
 
 export default function AnimalDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [selectedImage, setSelectedImage] = useState(0)
+  const { getPetById } = usePets()
 
-  const pet = petsData[id as keyof typeof petsData]
+  const pet = getPetById(Number(id))
 
   if (!pet) {
     return (

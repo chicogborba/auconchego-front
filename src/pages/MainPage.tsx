@@ -5,9 +5,11 @@ import heroImage from '@/assets/HERO.png'
 import HowItWorks from '@/components/HowItWorks'
 import AdoptCard from '@/components/AdoptCard'
 import AboutSection from '@/components/AboutSection'
-import { petsData } from '@/data/petsData'
+import { usePets } from '@/contexts/PetsContext'
 
 export default function MainPage() {
+  const { pets: petsData } = usePets()
+  
   // Converte o objeto de pets em array para mapear
   const pets = Object.values(petsData).map(pet => ({
     id: pet.id,

@@ -10,6 +10,7 @@ export default function TopBar() {
   const menuItems = [
     { label: 'Principal', path: '/main' },
     { label: 'Pets', path: '/pets' },
+    { label: 'Admin', path: '/pets/admin' },
     { label: 'Sobre nós', path: '/about' },
     { label: 'Como doar', path: '/donate' },
     { label: 'Transparência', path: '/transparency' },
