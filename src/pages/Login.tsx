@@ -110,6 +110,58 @@ export default function Login() {
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
 
+              {/* Filtro de compatibilidade */}
+              <div className="pt-4 border-t border-[#E8B563]/50">
+                <h3 className="text-lg font-semibold text-[#5C4A1F] mb-3 text-center">
+                  Compatibilidade com pets
+                </h3>
+
+                <div className="space-y-3">
+                  {/* Possui outros animais */}
+                  <select
+                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Você possui outros animais?</option>
+                    <option value="sim">Sim</option>
+                    <option value="nao">Não</option>
+                  </select>
+
+                  {/* Tipo de moradia */}
+                  <select
+                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Tipo de moradia</option>
+                    <option value="apartamento">Apartamento</option>
+                    <option value="casa">Casa com quintal</option>
+                    <option value="chacara">Chácara / sítio</option>
+                  </select>
+
+                  {/* Tempo em casa */}
+                  <select
+                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Tempo que passa em casa por dia</option>
+                    <option value="baixo">Menos de 4h</option>
+                    <option value="medio">4 a 8h</option>
+                    <option value="alto">Mais de 8h</option>
+                  </select>
+
+                  {/* Experiência */}
+                  <select
+                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] appearance-none transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Já teve pets antes?</option>
+                    <option value="sim">Sim</option>
+                    <option value="nao">Não</option>
+                  </select>
+                 
+                </div>
+              </div>
+
               {/* Botão Cadastro */}
               <Button
                 type="submit"
