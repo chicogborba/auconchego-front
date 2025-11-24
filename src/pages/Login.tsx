@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import * as api from '@/lib/api'
+import TutorFormModal from '@/components/TutorFormModal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import TopBar from '@/components/TopBar'
@@ -15,21 +17,78 @@ export default function Login() {
   const [registerPhone, setRegisterPhone] = useState('')
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
-  const [registerCPF, setRegisterCPF] = useState('')
+  const [registerEndereco, setRegisterEndereco] = useState('')
+  const [registerCidade, setRegisterCidade] = useState('')
+  const [registerEstado, setRegisterEstado] = useState('')
+  const [registerCEP, setRegisterCEP] = useState('')
+  const [tutorModalOpen, setTutorModalOpen] = useState(false)
+  const [tutorPreset, setTutorPreset] = useState<any | null>(null)
 
   const handleLogin = (e: FormEvent) => {
     e.preventDefault()
-    if (loginUsername && loginPassword) {
-      alert('Login realizado com sucesso!')
+    if (!loginUsername) {
+      alert('Informe o seu email para login')
+      return
     }
+
+    ;(async () => {
+      try {
+        // Simple login: find adotante by email
+        const adotantes = await api.getAdotantes()
+        const found = adotantes.find((a: any) => String(a.email).toLowerCase() === String(loginUsername).toLowerCase())
+        if (!found) {
+          alert('Adotante não encontrado. Faça cadastro primeiro.')
+          return
+        }
+        // store adotante id locally for compatibility
+        localStorage.setItem('adotanteId', String(found.id))
+        alert('Login realizado com sucesso! Compatibilidade será calculada para você.')
+      } catch (err) {
+        console.error('Erro no login', err)
+        alert('Erro ao tentar efetuar login. Tente novamente.')
+      }
+    })()
   }
 
   const handleRegister = (e: FormEvent) => {
     e.preventDefault()
     // Simulação de cadastro
-    if (registerName && registerEmail && registerPassword) {
-      alert('Cadastro realizado com sucesso!')
+    if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP) {
+      ;(async () => {
+        try {
+          const nomeFull = `${registerName} ${registerLastName}`.trim()
+          const payload = {
+            nome: nomeFull,
+            email: registerEmail,
+            telefone: registerPhone,
+            endereco: registerEndereco,
+            cidade: registerCidade,
+            estado: registerEstado,
+            cep: registerCEP,
+            // prefencias de compatibilidade podem ficar vazias por enquanto
+            especieDesejada: '',
+            possuiDisponibilidade: true,
+          }
+          const created = await api.createAdotante(payload)
+          // store adotante id locally for compatibility calculations
+          if (created && created.id) {
+            localStorage.setItem('adotanteId', String(created.id))
+          }
+          alert('Cadastro de adotante realizado com sucesso! Você será usado para calcular compatibilidade na listagem de pets.')
+        } catch (err) {
+          console.error('Erro ao criar adotante', err)
+          alert('Erro ao criar adotante. Verifique os dados e tente novamente.')
+        }
+      })()
+    } else {
+      alert('Preencha todos os campos obrigatórios de cadastro para criar um adotante.')
     }
+  }
+
+  const handleCreateTutorFromRegister = async () => {
+    // open modal prefilled
+    setTutorPreset({ nome: registerName, email: registerEmail, telefone: registerPhone })
+    setTutorModalOpen(true)
   }
 
   return (
@@ -100,12 +159,38 @@ export default function Login() {
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
 
-              {/* CPF */}
+              {/* Endereço */}
               <Input
                 type="text"
-                placeholder="CPF"
-                value={registerCPF}
-                onChange={(e) => setRegisterCPF(e.target.value)}
+                placeholder="Endereço"
+                value={registerEndereco}
+                onChange={(e) => setRegisterEndereco(e.target.value)}
+                required
+                className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  type="text"
+                  placeholder="Cidade"
+                  value={registerCidade}
+                  onChange={(e) => setRegisterCidade(e.target.value)}
+                  required
+                  className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                />
+                <Input
+                  type="text"
+                  placeholder="Estado"
+                  value={registerEstado}
+                  onChange={(e) => setRegisterEstado(e.target.value)}
+                  required
+                  className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                />
+              </div>
+              <Input
+                type="text"
+                placeholder="CEP"
+                value={registerCEP}
+                onChange={(e) => setRegisterCEP(e.target.value)}
                 required
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
@@ -169,6 +254,9 @@ export default function Login() {
               >
                 Cadastro
               </Button>
+              <div className="mt-3">
+                <Button type="button" onClick={handleCreateTutorFromRegister} className="w-full h-12 md:h-14 bg-[#8B6914] hover:bg-[#6f5310] text-white font-bold text-lg md:text-xl rounded-2xl border-2 border-[#5C4A1F] shadow-md">Criar como Tutor</Button>
+              </div>
             </form>
           </div>
 
@@ -231,6 +319,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+      <TutorFormModal isOpen={tutorModalOpen} onClose={() => { setTutorModalOpen(false); setTutorPreset(null) }} tutor={tutorPreset} onSaved={() => { setTutorModalOpen(false); setTutorPreset(null); alert('Tutor criado com sucesso!') }} />
     </div>
   )
 }

@@ -14,7 +14,13 @@ export default function PetsAdmin() {
 
   const handleDelete = (id: number) => {
     if (window.confirm('Tem certeza que deseja deletar este pet?')) {
-      deletePet(id)
+      ;(async () => {
+        try {
+          await deletePet(id)
+        } catch (e) {
+          alert('Erro ao deletar pet')
+        }
+      })()
     }
   }
 

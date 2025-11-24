@@ -1,19 +1,38 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TopBar from '@/components/TopBar'
 import LocationMap from '@/components/LocationMap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Heart, MapPin, Calendar, Ruler, Weight, Syringe, Scissors, Sparkles, Cat, Dog } from 'lucide-react'
 import { usePets } from '@/contexts/PetsContext'
+import * as api from '@/lib/api'
 
 export default function AnimalDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [selectedImage, setSelectedImage] = useState(0)
   const { getPetById } = usePets()
+  const [pet, setPet] = useState<any | null>(null)
 
-  const pet = getPetById(Number(id))
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        if (!id) return
+        const idNum = Number(id)
+        // Prefer fresh fetch from backend to ensure we have current status
+        const backendPet = await api.getPetById(idNum)
+        if (!mounted) return
+        setPet(backendPet)
+      } catch (err) {
+        console.warn('Could not load pet from backend, falling back to context', err)
+        const fromCtx = getPetById(Number(id))
+        setPet(fromCtx ?? null)
+      }
+    })()
+    return () => { mounted = false }
+  }, [id])
 
   if (!pet) {
     return (
@@ -32,7 +51,19 @@ export default function AnimalDetail() {
   }
 
   const handleAdopt = () => {
-    alert(`Obrigado pelo interesse em adotar ${pet.name}! Em breve entraremos em contato.`)
+    ;(async () => {
+      try {
+        const adotanteIdStr = localStorage.getItem('adotanteId')
+        const adotanteId = adotanteIdStr ? Number(adotanteIdStr) : undefined
+        await api.adoptPet(pet.id, adotanteId)
+        alert(`A adoção de ${pet.name} foi registrada com sucesso! Obrigado.`)
+        // After adoption, go to main page — main route is /main
+        navigate('/main')
+      } catch (err) {
+        console.error('Erro ao adotar', err)
+        alert('Não foi possível concluir a adoção. Tente novamente.')
+      }
+    })()
   }
 
   return (

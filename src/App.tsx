@@ -9,6 +9,9 @@ import Contact from './pages/Contact'
 import AnimalDetail from './pages/AnimalDetail'
 import List from './pages/List'
 import PetsAdmin from './pages/PetsAdmin'
+import OngsAdmin from './pages/OngsAdmin'
+import TutorsAdmin from './pages/TutorsAdmin'
+import MyAdoptions from './pages/MyAdoptions'
 
 function App() {
   return (
@@ -19,7 +22,10 @@ function App() {
           <Route path="/main" element={<MainPage />} />
           <Route path="/animal/:id" element={<AnimalDetail />} />
           <Route path="/pets" element={<List />} />
+          <Route path="/meus-adotados" element={<MyAdoptions />} />
           <Route path="/pets/admin" element={<PetsAdmin />} />
+          <Route path="/ongs/admin" element={<OngsAdmin />} />
+          <Route path="/tutores/admin" element={<TutorsAdmin />} />
           <Route path="/about" element={<About />} />
           <Route path="/donate" element={<Donate />} />
           <Route path="/transparency" element={<Transparency />} />

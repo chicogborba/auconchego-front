@@ -9,6 +9,7 @@ interface AdoptCardProps {
   description: string
   image: string
   tags: string[]
+  compatibility?: number
   onAdopt?: () => void
   onDetails?: () => void
 }
@@ -20,6 +21,7 @@ export default function AdoptCard({
   description,
   image,
   tags,
+  compatibility,
 }: AdoptCardProps) {
   const navigate = useNavigate()
 
@@ -57,6 +59,12 @@ export default function AdoptCard({
 
       {/* Conteúdo do Card */}
       <div className="p-6">
+        {/* Compatibilidade (se disponível) */}
+        {typeof compatibility !== 'undefined' && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-[#EAF7E9] text-green-800 font-semibold border border-green-200">Compatibilidade: {Math.round(compatibility)}%</span>
+          </div>
+        )}
         {/* Nome */}
         <h3 className="text-3xl font-bold text-[#5C4A1F] mb-3">{name}</h3>
 

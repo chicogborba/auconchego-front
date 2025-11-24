@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import type { ChangeEvent } from 'react'
 import { usePets } from '@/contexts/PetsContext'
+import * as api from '@/lib/api'
 import type { Pet } from '@/data/petsData'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { X, Upload, MapPin, Loader2 } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 
 interface PetFormModalProps {
   isOpen: boolean
@@ -16,185 +16,126 @@ interface PetFormModalProps {
 interface FormData {
   type: 'cat' | 'dog'
   name: string
-  description: string
-  images: string[]
-  tags: string
-  age: string
-  size: string
-  weight: string
-  location: string
-  address: string
-  vaccinated: boolean
-  castrated: boolean
-  temperament: string
-  healthStatus: string
-  coordinates: {
-    lat: number
-    lng: number
-  }
+  raca: string
+  porte: string
+  sexo: 'MACHO' | 'FEMEA' | string
+  necessidadesEspeciais: boolean
+  tratamentoContinuo: boolean
+  doencaCronica: boolean
+  description?: string
+  healthStatus?: string
+  dataResgate?: string
+  status?: 'DISPONIVEL' | 'ADOTADO' | 'RESERVADO'
+  idTutorOrigem?: number
+  idTutorAdotante?: number
+  idOng?: number
 }
 
 export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps) {
   const { addPet, updatePet } = usePets()
   const [loading, setLoading] = useState(false)
-  const [geocoding, setGeocoding] = useState(false)
   
   const [formData, setFormData] = useState<FormData>({
     type: 'dog',
     name: '',
+    raca: '',
+    porte: 'MEDIO',
+    sexo: 'MACHO',
+    necessidadesEspeciais: false,
+    tratamentoContinuo: false,
+    doencaCronica: false,
     description: '',
-    images: [''],
-    tags: '',
-    age: '',
-    size: 'Médio',
-    weight: '',
-    location: '',
-    address: '',
-    vaccinated: false,
-    castrated: false,
-    temperament: '',
     healthStatus: '',
-    coordinates: { lat: 0, lng: 0 }
+    dataResgate: new Date().toISOString().slice(0,10),
+    status: 'DISPONIVEL',
+    idTutorOrigem: undefined,
+    idTutorAdotante: undefined,
+    idOng: undefined
   })
+
+  const [ongs, setOngs] = useState<any[]>([])
+  const [tutors, setTutors] = useState<any[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    api.getOngs().then(data => {
+      if (mounted) setOngs(data)
+    }).catch(err => {
+      console.warn('Failed to load ONGs', err)
+    })
+    api.getTutors().then(d => { if (mounted) setTutors(d) }).catch(() => {})
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     if (pet) {
       setFormData({
-        type: pet.type,
-        name: pet.name,
-        description: pet.description,
-        images: pet.images,
-        tags: pet.tags.join(', '),
-        age: pet.age,
-        size: pet.size,
-        weight: pet.weight,
-        location: pet.location,
-        address: pet.address,
-        vaccinated: pet.vaccinated,
-        castrated: pet.castrated,
-        temperament: pet.temperament.join(', '),
-        healthStatus: pet.healthStatus,
-        coordinates: pet.coordinates
+        type: (pet as any).especie?.toLowerCase()?.includes('gato') ? 'cat' : 'dog',
+        raca: (pet as any).raca ?? '',
+        name: (pet as any).nome ?? pet.name,
+        description: (pet as any).descricao ?? '',
+        healthStatus: (pet as any).descricaoSaude ?? '',
+        dataResgate: (pet as any).dataResgate ? new Date((pet as any).dataResgate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+        status: (pet as any).status ?? 'DISPONIVEL',
+        idTutorOrigem: (pet as any).idTutorOrigem ?? undefined,
+        idTutorAdotante: (pet as any).idTutorAdotante ?? undefined,
+        porte: (pet as any).porte ?? 'MEDIO',
+        sexo: (pet as any).sexo ?? 'MACHO',
+        necessidadesEspeciais: !!(pet as any).necessidadesEspeciais,
+        tratamentoContinuo: !!(pet as any).tratamentoContinuo,
+        doencaCronica: !!(pet as any).doencaCronica,
+        idOng: (pet as any).idOng ?? (pet as any).ong?.id ?? undefined
       })
     } else {
       setFormData({
         type: 'dog',
+        raca: '',
         name: '',
         description: '',
-        images: [''],
-        tags: '',
-        age: '',
-        size: 'Médio',
-        weight: '',
-        location: '',
-        address: '',
-        vaccinated: false,
-        castrated: false,
-        temperament: '',
         healthStatus: '',
-        coordinates: { lat: 0, lng: 0 }
+        dataResgate: new Date().toISOString().slice(0,10),
+        status: 'DISPONIVEL',
+        idTutorOrigem: undefined,
+        idTutorAdotante: undefined,
+        porte: 'MEDIO',
+        sexo: 'MACHO',
+        necessidadesEspeciais: false,
+        tratamentoContinuo: false,
+        doencaCronica: false,
+        idOng: undefined
       })
     }
   }, [pet, isOpen])
-
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const base64 = reader.result as string
-        setFormData(prev => {
-          const newImages = [...prev.images]
-          newImages[index] = base64
-          return { ...prev, images: newImages }
-        })
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const addImageSlot = () => {
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, '']
-    }))
-  }
-
-  const removeImageSlot = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }))
-  }
-
-  const geocodeAddress = async () => {
-    if (!formData.address) {
-      alert('Por favor, insira um endereço')
-      return
-    }
-
-    setGeocoding(true)
-    try {
-      // Usando Nominatim (OpenStreetMap) para geocoding gratuito
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.address)}&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'AuconchegoPets/1.0'
-          }
-        }
-      )
-      
-      const data = await response.json()
-      
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0]
-        setFormData(prev => ({
-          ...prev,
-          coordinates: {
-            lat: parseFloat(lat),
-            lng: parseFloat(lon)
-          }
-        }))
-        alert('Coordenadas encontradas com sucesso!')
-      } else {
-        alert('Não foi possível encontrar as coordenadas para este endereço')
-      }
-    } catch (error) {
-      console.error('Erro ao buscar coordenadas:', error)
-      alert('Erro ao buscar coordenadas. Tente novamente.')
-    } finally {
-      setGeocoding(false)
-    }
-  }
+  // Removed image slots and geocoding — form contains only backend fields
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const petData = {
-        type: formData.type,
+      // Build payload in frontend shape — api.createPet will map to backend keys
+      const payload: Record<string, any> = {
         name: formData.name,
-        description: formData.description,
-        images: formData.images.filter(img => img !== ''),
-        tags: formData.tags.split(',').map(t => t.trim()).filter(t => t !== ''),
-        age: formData.age,
-        size: formData.size,
-        weight: formData.weight,
-        location: formData.location,
-        address: formData.address,
-        vaccinated: formData.vaccinated,
-        castrated: formData.castrated,
-        temperament: formData.temperament.split(',').map(t => t.trim()).filter(t => t !== ''),
-        healthStatus: formData.healthStatus,
-        coordinates: formData.coordinates
+        type: formData.type,
+        raca: formData.raca || 'SRD',
+        porte: (formData.porte || 'MEDIO'),
+        sexo: (formData.sexo || 'MACHO'),
+        descricao: formData.description,
+        descricaoSaude: formData.healthStatus,
+        dataResgate: formData.dataResgate,
+        status: formData.status,
+        necessidadesEspeciais: !!formData.necessidadesEspeciais,
+        tratamentoContinuo: !!formData.tratamentoContinuo,
+        doencaCronica: !!formData.doencaCronica,
+        idTutorOrigem: formData.idTutorOrigem,
+        idTutorAdotante: formData.idTutorAdotante,
+        idOng: formData.idOng ?? undefined,
       }
 
       if (pet) {
-        updatePet(pet.id, petData)
+        await updatePet(pet.id, payload)
       } else {
-        addPet(petData)
+        await addPet(payload)
       }
 
       onClose()
@@ -272,147 +213,20 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
           {/* Descrição */}
           <div>
             <Label htmlFor="description" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-              Descrição *
+              Descrição
             </Label>
             <textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl min-h-[120px]"
-              required
+              className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl min-h-[100px]"
             />
           </div>
 
-          {/* Imagens */}
-          <div>
-            <Label className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-              Imagens (Base64)
-            </Label>
-            <div className="space-y-3">
-              {formData.images.map((image, index) => (
-                <div key={index} className="flex gap-3 items-start">
-                  <div className="flex-1">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, index)}
-                      className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-                    />
-                    {image && (
-                      <img
-                        src={image}
-                        alt={`Preview ${index + 1}`}
-                        className="mt-2 w-32 h-32 object-cover rounded-lg border-2 border-[#5C4A1F]/20"
-                      />
-                    )}
-                  </div>
-                  {formData.images.length > 1 && (
-                    <Button
-                      type="button"
-                      onClick={() => removeImageSlot(index)}
-                      variant="destructive"
-                      className="mt-1"
-                    >
-                      <X className="w-5 h-5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <Button
-                type="button"
-                onClick={addImageSlot}
-                className="bg-[#5C4A1F] hover:bg-[#4C3A0F] text-white"
-              >
-                <Upload className="w-5 h-5 mr-2" />
-                Adicionar Mais Imagens
-              </Button>
-            </div>
-          </div>
-
-          {/* Grid de informações */}
+          {/* Health / DataResgate / Status / Tutors */}
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Tags */}
             <div>
-              <Label htmlFor="tags" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Tags (separadas por vírgula)
-              </Label>
-              <Input
-                id="tags"
-                value={formData.tags}
-                onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
-                placeholder="Ex: Adulto, Grande, Macho"
-                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-              />
-            </div>
-
-            {/* Idade */}
-            <div>
-              <Label htmlFor="age" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Idade *
-              </Label>
-              <Input
-                id="age"
-                value={formData.age}
-                onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                placeholder="Ex: 2 anos"
-                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-                required
-              />
-            </div>
-
-            {/* Tamanho */}
-            <div>
-              <Label htmlFor="size" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Tamanho *
-              </Label>
-              <select
-                id="size"
-                value={formData.size}
-                onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
-                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
-                required
-              >
-                <option value="Pequeno">Pequeno</option>
-                <option value="Médio">Médio</option>
-                <option value="Grande">Grande</option>
-              </select>
-            </div>
-
-            {/* Peso */}
-            <div>
-              <Label htmlFor="weight" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Peso *
-              </Label>
-              <Input
-                id="weight"
-                value={formData.weight}
-                onChange={(e) => setFormData(prev => ({ ...prev, weight: e.target.value }))}
-                placeholder="Ex: 5kg"
-                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-                required
-              />
-            </div>
-
-            {/* Localização */}
-            <div>
-              <Label htmlFor="location" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Localização (cidade) *
-              </Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                placeholder="Ex: São Paulo, SP"
-                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-                required
-              />
-            </div>
-
-            {/* Status de Saúde */}
-            <div>
-              <Label htmlFor="healthStatus" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                Status de Saúde
-              </Label>
+              <Label htmlFor="healthStatus" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Status de Saúde</Label>
               <Input
                 id="healthStatus"
                 value={formData.healthStatus}
@@ -421,77 +235,148 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                 className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
               />
             </div>
+
+            <div>
+              <Label htmlFor="dataResgate" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Data do Resgate</Label>
+              <Input
+                id="dataResgate"
+                type="date"
+                value={formData.dataResgate}
+                onChange={(e) => setFormData(prev => ({ ...prev, dataResgate: e.target.value }))}
+                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="status" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Status</Label>
+              <select
+                id="status"
+                value={formData.status}
+                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+              >
+                <option value="DISPONIVEL">Disponível</option>
+                <option value="ADOTADO">Adotado</option>
+                <option value="RESERVADO">Reservado</option>
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="idTutorOrigem" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Tutor de Origem</Label>
+                <select
+                  id="idTutorOrigem"
+                  value={formData.idTutorOrigem ?? ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, idTutorOrigem: e.target.value ? Number(e.target.value) : undefined }))}
+                  className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+                >
+                  <option value="">-- Selecionar tutor (opcional) --</option>
+                  {tutors.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+            </div>
+
+            <div>
+              <Label htmlFor="idTutorAdotante" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Tutor Adotante</Label>
+              <select
+                id="idTutorAdotante"
+                value={formData.idTutorAdotante ?? ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, idTutorAdotante: e.target.value ? Number(e.target.value) : undefined }))}
+                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+              >
+                <option value="">-- Selecionar tutor (opcional) --</option>
+                {tutors.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="idOng" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">ONG</Label>
+              <select
+                id="idOng"
+                value={formData.idOng ?? ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, idOng: e.target.value ? Number(e.target.value) : undefined }))}
+                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+              >
+                <option value="">-- Selecionar ONG (opcional) --</option>
+                {ongs.map(o => (
+                  <option key={o.id} value={o.id}>{o.nome} ({o.cnpj})</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Endereço e Coordenadas */}
-          <div>
-            <Label htmlFor="address" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-              Endereço Completo *
-            </Label>
-            <div className="flex gap-3">
+          {/* Raca, Porte, Sexo and backend booleans */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <Label htmlFor="raca" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
+                Raça *
+              </Label>
               <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="Ex: Rua Augusta, 1234 - Consolação, São Paulo - SP"
-                className="flex-1 bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
+                id="raca"
+                value={formData.raca}
+                onChange={(e) => setFormData(prev => ({ ...prev, raca: e.target.value }))}
+                placeholder="Ex: SRD"
+                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
                 required
               />
-              <Button
-                type="button"
-                onClick={geocodeAddress}
-                disabled={geocoding}
-                className="bg-[#F5B563] hover:bg-[#E5A553] text-[#5C4A1F] font-semibold whitespace-nowrap"
-              >
-                {geocoding ? (
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                ) : (
-                  <MapPin className="w-5 h-5 mr-2" />
-                )}
-                Buscar Coordenadas
-              </Button>
             </div>
-            {formData.coordinates.lat !== 0 && formData.coordinates.lng !== 0 && (
-              <p className="text-[#8B6914] mt-2 text-sm">
-                Coordenadas: {formData.coordinates.lat.toFixed(6)}, {formData.coordinates.lng.toFixed(6)}
-              </p>
-            )}
-          </div>
 
-          {/* Temperamento */}
-          <div>
-            <Label htmlFor="temperament" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-              Temperamento (separado por vírgula)
-            </Label>
-            <Input
-              id="temperament"
-              value={formData.temperament}
-              onChange={(e) => setFormData(prev => ({ ...prev, temperament: e.target.value }))}
-              placeholder="Ex: Carinhoso, Brincalhão, Sociável"
-              className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F]"
-            />
-          </div>
+            <div>
+              <Label htmlFor="porte" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Porte *</Label>
+              <select
+                id="porte"
+                value={formData.porte}
+                onChange={(e) => setFormData(prev => ({ ...prev, porte: e.target.value }))}
+                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+                required
+              >
+                <option value="PEQUENO">Pequeno</option>
+                <option value="MEDIO">Médio</option>
+                <option value="GRANDE">Grande</option>
+              </select>
+            </div>
 
-          {/* Checkboxes */}
-          <div className="flex gap-6">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.vaccinated}
-                onChange={(e) => setFormData(prev => ({ ...prev, vaccinated: e.target.checked }))}
-                className="w-6 h-6 rounded border-2 border-[#5C4A1F]/20"
-              />
-              <span className="text-[#5C4A1F] text-lg font-medium">Vacinado</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.castrated}
-                onChange={(e) => setFormData(prev => ({ ...prev, castrated: e.target.checked }))}
-                className="w-6 h-6 rounded border-2 border-[#5C4A1F]/20"
-              />
-              <span className="text-[#5C4A1F] text-lg font-medium">Castrado</span>
-            </label>
+            <div>
+              <Label htmlFor="sexo" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">Sexo *</Label>
+              <select
+                id="sexo"
+                value={formData.sexo}
+                onChange={(e) => setFormData(prev => ({ ...prev, sexo: e.target.value }))}
+                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
+                required
+              >
+                <option value="MACHO">Macho</option>
+                <option value="FEMEA">Fêmea</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col justify-center gap-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.necessidadesEspeciais}
+                  onChange={(e) => setFormData(prev => ({ ...prev, necessidadesEspeciais: e.target.checked }))}
+                  className="w-6 h-6 rounded border-2 border-[#5C4A1F]/20"
+                />
+                <span className="text-[#5C4A1F] text-lg font-medium">Necessidades Especiais</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.tratamentoContinuo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tratamentoContinuo: e.target.checked }))}
+                  className="w-6 h-6 rounded border-2 border-[#5C4A1F]/20"
+                />
+                <span className="text-[#5C4A1F] text-lg font-medium">Tratamento Contínuo</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.doencaCronica}
+                  onChange={(e) => setFormData(prev => ({ ...prev, doencaCronica: e.target.checked }))}
+                  className="w-6 h-6 rounded border-2 border-[#5C4A1F]/20"
+                />
+                <span className="text-[#5C4A1F] text-lg font-medium">Doença Crônica</span>
+              </label>
+            </div>
           </div>
 
           {/* Botões */}

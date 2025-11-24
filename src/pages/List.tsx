@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import TopBar from '@/components/TopBar'
 import AdoptCard from '@/components/AdoptCard'
 import { usePets } from '@/contexts/PetsContext'
 import { Search } from 'lucide-react'
+import * as api from '@/lib/api'
 
 export default function List() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -11,6 +12,26 @@ export default function List() {
 
   // Usa os pets do contexto
   const allPets = Object.values(pets)
+  const [compatMap, setCompatMap] = useState<Record<number, number>>({})
+
+  useEffect(() => {
+    const adotanteIdStr = localStorage.getItem('adotanteId')
+    if (!adotanteIdStr) return
+    const id = Number(adotanteIdStr)
+    if (Number.isNaN(id)) return
+    let mounted = true
+    api.getAdotanteCompatibility(id).then((rels: any[]) => {
+      if (!mounted) return
+      const map: Record<number, number> = {}
+      for (const r of rels) {
+        if (r.idPet !== undefined && r.compatibilidade !== undefined) map[r.idPet] = r.compatibilidade
+      }
+      setCompatMap(map)
+    }).catch(err => {
+      console.warn('Failed to load compatibilidade', err)
+    })
+    return () => { mounted = false }
+  }, [pets])
 
   // Filtra os pets baseado na busca
   const filteredPets = allPets.filter(pet => {
@@ -60,6 +81,7 @@ export default function List() {
                 description={pet.description}
                 image={pet.images[0]}
                 tags={pet.tags}
+                compatibility={compatMap[pet.id]}
               />
             </div>
           ))}
