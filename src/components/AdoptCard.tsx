@@ -3,106 +3,187 @@ import { Cat, Dog } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 interface AdoptCardProps {
-  id: number
-  type: 'cat' | 'dog'
-  name: string
-  description: string
-  image: string
-  tags: string[]
-  compatibility?: number
-  onAdopt?: () => void
-  onDetails?: () => void
+    id: number
+    type: 'cat' | 'dog'
+    name: string
+    description: string
+    image: string
+    tags: string[]
+    compatibility?: number
+    // novos dados vindos do backend / mapBackendToFrontend
+    age?: string | number
+    size?: string
+    weight?: string | number
+    location?: string
+    vaccinated?: boolean
+    castrated?: boolean
+    temperament?: string[]
+    healthStatus?: string
+    onAdopt?: () => void
+    onDetails?: () => void
 }
 
 export default function AdoptCard({
-  id,
-  type,
-  name,
-  description,
-  image,
-  tags,
-  compatibility,
-}: AdoptCardProps) {
-  const navigate = useNavigate()
+                                      id,
+                                      type,
+                                      name,
+                                      description,
+                                      image,
+                                      tags,
+                                      compatibility,
+                                      age,
+                                      size,
+                                      weight,
+                                      location,
+                                      vaccinated,
+                                      castrated,
+                                      temperament,
+                                      healthStatus,
+                                      onAdopt,
+                                      onDetails,
+                                  }: AdoptCardProps) {
+    const navigate = useNavigate()
 
-  const handleAdopt = () => {
-    navigate(`/animal/${id}`)
-  }
+    const handleAdopt = () => {
+        if (onAdopt) return onAdopt()
+        navigate(`/animal/${id}`)
+    }
 
-  const handleDetails = () => {
-    navigate(`/animal/${id}`)
-  }
-  return (
-    <div className="bg-[#F5E6C3] rounded-3xl overflow-hidden shadow-lg max-w-md w-full border-2 border-[#5C4A1F]/20">
-      {/* Imagem do Pet com Badge do Tipo */}
-      <div className="relative h-64">
-        <img 
-          src={image} 
-          alt={name}
-          className="w-full h-full object-cover"
-        />
-        {/* Badge de Tipo (Gato/Cachorro) */}
-        <div className="absolute top-4 right-4 bg-[#F5E6C3] rounded-full px-4 py-2 flex items-center gap-2 border-2 border-[#5C4A1F]">
-          {type === 'cat' ? (
-            <>
-              <Cat className="w-5 h-5 text-[#5C4A1F]" />
-              <span className="font-bold text-[#5C4A1F]">Gato</span>
-            </>
-          ) : (
-            <>
-              <Dog className="w-5 h-5 text-[#5C4A1F]" />
-              <span className="font-bold text-[#5C4A1F]">Cachorro</span>
-            </>
-          )}
-        </div>
-      </div>
+    const handleDetails = () => {
+        if (onDetails) return onDetails()
+        navigate(`/animal/${id}`)
+    }
 
-      {/* Conteúdo do Card */}
-      <div className="p-6">
-        {/* Compatibilidade (se disponível) */}
-        {typeof compatibility !== 'undefined' && (
-          <div className="mb-3 flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-[#EAF7E9] text-green-800 font-semibold border border-green-200">Compatibilidade: {Math.round(compatibility)}%</span>
-          </div>
-        )}
-        {/* Nome */}
-        <h3 className="text-3xl font-bold text-[#5C4A1F] mb-3">{name}</h3>
+    return (
+        <div className="bg-[#F5E6C3] rounded-3xl overflow-hidden shadow-lg max-w-md w-full border-2 border-[#5C4A1F]/20">
+            {/* Imagem do Pet com Badge do Tipo */}
+            <div className="relative h-64">
+                <img
+                    src={image}
+                    alt={name}
+                    className="w-full h-full object-cover"
+                />
+                {/* Badge de Tipo (Gato/Cachorro) */}
+                <div className="absolute top-4 right-4 bg-[#F5E6C3] rounded-full px-4 py-2 flex items-center gap-2 border-2 border-[#5C4A1F]">
+                    {type === 'cat' ? (
+                        <>
+                            <Cat className="w-5 h-5 text-[#5C4A1F]" />
+                            <span className="font-bold text-[#5C4A1F]">Gato</span>
+                        </>
+                    ) : (
+                        <>
+                            <Dog className="w-5 h-5 text-[#5C4A1F]" />
+                            <span className="font-bold text-[#5C4A1F]">Cachorro</span>
+                        </>
+                    )}
+                </div>
+            </div>
 
-        {/* Descrição */}
-        <p className="text-[#5C4A1F] text-sm mb-4 leading-relaxed">
-          {description}
-        </p>
+            {/* Conteúdo do Card */}
+            <div className="p-6">
+                {/* Compatibilidade (se disponível) */}
+                {typeof compatibility !== 'undefined' && (
+                    <div className="mb-3 flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-[#EAF7E9] text-green-800 font-semibold border border-green-200">
+              Compatibilidade: {Math.round(compatibility)}%
+            </span>
+                    </div>
+                )}
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tags.map((tag, index) => (
-            <span
-              key={index}
-              className="px-4 py-1 bg-[#FFF1BA] border-2 border-[#5C4A1F] rounded-full text-sm font-medium text-[#5C4A1F]"
-            >
+                {/* Nome */}
+                <h3 className="text-3xl font-bold text-[#5C4A1F] mb-2">{name}</h3>
+
+                {/* Infos rápidas: idade / porte / peso / localização */}
+                <div className="flex flex-wrap gap-2 mb-3 text-xs font-medium text-[#5C4A1F]">
+                    {age && (
+                        <span className="px-3 py-1 bg-[#FFF1BA] rounded-full border border-[#5C4A1F]/40">
+              Idade: {age}
+            </span>
+                    )}
+                    {size && (
+                        <span className="px-3 py-1 bg-[#FFF1BA] rounded-full border border-[#5C4A1F]/40">
+              Porte: {size}
+            </span>
+                    )}
+                    {typeof weight !== 'undefined' && weight !== '' && (
+                        <span className="px-3 py-1 bg-[#FFF1BA] rounded-full border border-[#5C4A1F]/40">
+              Peso: {weight} kg
+            </span>
+                    )}
+                    {location && (
+                        <span className="px-3 py-1 bg-[#FFF1BA] rounded-full border border-[#5C4A1F]/40">
+              Local: {location}
+            </span>
+                    )}
+                </div>
+
+                {/* Status de saúde / vacinação / castração */}
+                {(healthStatus || typeof vaccinated !== 'undefined' || typeof castrated !== 'undefined') && (
+                    <div className="mb-4 text-xs text-[#5C4A1F] space-y-1">
+                        {healthStatus && (
+                            <p>
+                                <span className="font-semibold">Saúde:</span> {healthStatus}
+                            </p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                            {typeof vaccinated !== 'undefined' && (
+                                <span className="px-2 py-1 rounded-full bg-[#EAF7E9] border border-green-300 text-[0.7rem]">
+                  {vaccinated ? 'Vacinado' : 'Não vacinado'}
+                </span>
+                            )}
+                            {typeof castrated !== 'undefined' && (
+                                <span className="px-2 py-1 rounded-full bg-[#EAF7E9] border border-green-300 text-[0.7rem]">
+                  {castrated ? 'Castrado' : 'Não castrado'}
+                </span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Descrição */}
+                <p className="text-[#5C4A1F] text-sm mb-4 leading-relaxed">
+                    {description}
+                </p>
+
+                {/* Tags + temperamento */}
+                <div className="flex flex-wrap gap-2 mb-6">
+                    {tags.map((tag, index) => (
+                        <span
+                            key={`tag-${index}`}
+                            className="px-4 py-1 bg-[#FFF1BA] border-2 border-[#5C4A1F] rounded-full text-sm font-medium text-[#5C4A1F]"
+                        >
               {tag}
             </span>
-          ))}
-        </div>
+                    ))}
 
-        {/* Botões */}
-        <div className="flex flex-col gap-3">
-          <Button
-            onClick={handleAdopt}
-            className="w-full h-12 bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] font-bold text-lg rounded-xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all"
-          >
-            Quero adotar
-          </Button>
-          
-          <Button
-            onClick={handleDetails}
-            variant="outline"
-            className="w-full h-12 bg-[#FFF1BA] hover:bg-[#F5E6C3] text-[#FFBD59] font-bold text-lg rounded-xl border-2 border-[#FFBD59] shadow-md hover:shadow-lg transition-all"
-          >
-            Detalhes
-          </Button>
+                    {temperament && temperament.length > 0 && temperament.map((temp, index) => (
+                        <span
+                            key={`temp-${index}`}
+                            className="px-3 py-1 bg-[#FCE4EC] border-2 border-[#5C4A1F]/40 rounded-full text-xs font-medium text-[#5C4A1F]"
+                        >
+              {temp}
+            </span>
+                    ))}
+                </div>
+
+                {/* Botões */}
+                <div className="flex flex-col gap-3">
+                    <Button
+                        onClick={handleAdopt}
+                        className="w-full h-12 bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] font-bold text-lg rounded-xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all"
+                    >
+                        Quero adotar
+                    </Button>
+
+                    <Button
+                        onClick={handleDetails}
+                        variant="outline"
+                        className="w-full h-12 bg-[#FFF1BA] hover:bg-[#F5E6C3] text-[#FFBD59] font-bold text-lg rounded-xl border-2 border-[#FFBD59] shadow-md hover:shadow-lg transition-all"
+                    >
+                        Detalhes
+                    </Button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  )
+    )
 }
