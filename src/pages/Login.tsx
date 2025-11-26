@@ -7,11 +7,13 @@ import TopBar from '@/components/TopBar'
 
 export default function Login() {
   
-  // Estados para Login
-  const [loginUsername, setLoginUsername] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
-  
-  // Estados para Cadastro
+    // Estados para Login
+    const [loginUsername, setLoginUsername] = useState('')
+    const [loginPassword, setLoginPassword] = useState('')
+    const [loginRole, setLoginRole] = useState<'ADOTANTE' | 'TUTOR' | 'ONG' | 'ROOT'>('ADOTANTE')
+
+
+    // Estados para Cadastro
   const [registerName, setRegisterName] = useState('')
   const [registerLastName, setRegisterLastName] = useState('')
   const [registerPhone, setRegisterPhone] = useState('')
@@ -24,33 +26,127 @@ export default function Login() {
   const [tutorModalOpen, setTutorModalOpen] = useState(false)
   const [tutorPreset, setTutorPreset] = useState<any | null>(null)
 
-  const handleLogin = (e: FormEvent) => {
-    e.preventDefault()
-    if (!loginUsername) {
-      alert('Informe o seu email para login')
-      return
+    const handleLogin = (e: FormEvent) => {
+        e.preventDefault()
+
+        if (!loginUsername) {
+            alert('Informe o seu email para login')
+            return
+        }
+
+        ;(async () => {
+            try {
+                // ADOTANTE
+                if (loginRole === 'ADOTANTE') {
+                    const adotantes = await api.getAdotantes()
+                    const found = adotantes.find(
+                        (a: any) =>
+                            String(a.email).toLowerCase() === String(loginUsername).toLowerCase(),
+                    )
+
+                    if (!found) {
+                        alert('Adotante não encontrado. Faça cadastro primeiro.')
+                        return
+                    }
+
+                    const currentUser = {
+                        id: found.id,
+                        role: 'ADOTANTE' as const,
+                        nome: found.nome,
+                        email: found.email,
+                    }
+
+                    // usado depois para compatibilidade e adoção
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser))
+                    localStorage.setItem('adotanteId', String(found.id))
+
+                    alert('Login realizado como adotante.')
+                }
+
+                // TUTOR
+                else if (loginRole === 'TUTOR') {
+                    const tutores = await api.getTutors()
+                    const found = tutores.find(
+                        (t: any) =>
+                            String(t.email).toLowerCase() === String(loginUsername).toLowerCase(),
+                    )
+
+                    if (!found) {
+                        alert('Tutor não encontrado. Peça para uma ONG ou root te cadastrar.')
+                        return
+                    }
+
+                    const currentUser = {
+                        id: found.id,
+                        role: 'TUTOR' as const,
+                        nome: found.nome,
+                        email: found.email,
+                        idOng: found.idOng,
+                    }
+
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser))
+                    alert('Login realizado como tutor.')
+                }
+
+                // ONG
+                else if (loginRole === 'ONG') {
+                    const ongs = await api.getOngs()
+                    const found = ongs.find(
+                        (o: any) =>
+                            String(o.email).toLowerCase() === String(loginUsername).toLowerCase(),
+                    )
+
+                    if (!found) {
+                        alert('ONG não encontrada. Peça para o root cadastrar.')
+                        return
+                    }
+
+                    const currentUser = {
+                        id: found.id,
+                        role: 'ONG' as const,
+                        nome: found.nome,
+                        email: found.email,
+                    }
+
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser))
+                    alert('Login realizado como ONG.')
+                }
+
+                // ROOT (apenas front)
+                else if (loginRole === 'ROOT') {
+                    const ROOT_EMAIL = 'root@auconchego.com'
+                    const ROOT_PASSWORD = 'root123'
+
+                    if (
+                        loginUsername.toLowerCase() !== ROOT_EMAIL.toLowerCase() ||
+                        loginPassword !== ROOT_PASSWORD
+                    ) {
+                        alert('Credenciais de administrador inválidas.')
+                        return
+                    }
+
+                    const currentUser = {
+                        id: 0,
+                        role: 'ROOT' as const,
+                        nome: 'Root',
+                        email: ROOT_EMAIL,
+                    }
+
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser))
+                    alert('Login realizado como administrador/root.')
+                }
+
+                // depois de qualquer login bem sucedido
+                window.location.href = '/main'
+            } catch (err) {
+                console.error('Erro no login', err)
+                alert('Erro ao tentar efetuar login. Tente novamente.')
+            }
+        })()
     }
 
-    ;(async () => {
-      try {
-        // Simple login: find adotante by email
-        const adotantes = await api.getAdotantes()
-        const found = adotantes.find((a: any) => String(a.email).toLowerCase() === String(loginUsername).toLowerCase())
-        if (!found) {
-          alert('Adotante não encontrado. Faça cadastro primeiro.')
-          return
-        }
-        // store adotante id locally for compatibility
-        localStorage.setItem('adotanteId', String(found.id))
-        alert('Login realizado com sucesso! Compatibilidade será calculada para você.')
-      } catch (err) {
-        console.error('Erro no login', err)
-        alert('Erro ao tentar efetuar login. Tente novamente.')
-      }
-    })()
-  }
 
-  const handleRegister = (e: FormEvent) => {
+    const handleRegister = (e: FormEvent) => {
     e.preventDefault()
     // Simulação de cadastro
     if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP) {
@@ -286,35 +382,53 @@ export default function Login() {
             </div>
             
             <div className="flex flex-col justify-center min-h-[300px] md:min-h-[400px]">
-              <form onSubmit={handleLogin} className="space-y-4 md:space-y-5">
-                {/* Login */}
-                <Input
-                  type="text"
-                  placeholder="Login"
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  required
-                  className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                />
+                <form onSubmit={handleLogin} className="space-y-4 md:space-y-5">
+                    {/* Tipo de usuário */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-[#5C4A1F]">
+                            Entrar como
+                        </label>
+                        <select
+                            value={loginRole}
+                            onChange={(e) => setLoginRole(e.target.value as any)}
+                            className="w-full h-12 md:h-14 rounded-md border-2 border-[#F5E6C3] bg-[#F5E6C3] px-3 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                        >
+                            <option value="ADOTANTE">Adotante</option>
+                            <option value="TUTOR">Tutor</option>
+                            <option value="ONG">ONG</option>
+                            <option value="ROOT">Administrador (Root)</option>
+                        </select>
+                    </div>
 
-                {/* Senha */}
-                <Input
-                  type="password"
-                  placeholder="Senha"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                  className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                />
+                    {/* Login (e-mail) */}
+                    <Input
+                        type="email"
+                        placeholder="E-mail"
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        required
+                        className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#F5E6C3] rounded-md px-3 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                    />
 
-                {/* Botão Entre */}
-                <Button
-                  type="submit"
-                  className="w-full h-12 md:h-14 bg-[#F5B563] hover:bg-[#E8A550] text-[#5C4A1F] font-bold text-lg md:text-xl rounded-2xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  Entre
-                </Button>
-              </form>
+                    {/* Senha – só obrigatória pro ROOT */}
+                    <Input
+                        type="password"
+                        placeholder={loginRole === 'ROOT' ? 'Senha do administrador' : 'Senha (não usada para este login)'}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required={loginRole === 'ROOT'}
+                        className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#F5E6C3] rounded-md px-3 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                    />
+
+                    {/* Botão Entre */}
+                    <Button
+                        type="submit"
+                        className="w-full h-12 md:h-14 bg-[#F5B563] hover:bg-[#F5B563]/90 text-[#5C4A1F] font-bold rounded-md shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        Entre
+                    </Button>
+                </form>
+
             </div>
           </div>
         </div>
