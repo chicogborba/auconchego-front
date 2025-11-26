@@ -42,7 +42,6 @@ export default function TopBar() {
         // ADOTANTE
         if (currentUser?.role === 'ADOTANTE') {
             items.push({ label: 'Meus adotados', path: '/meus-adotados' })
-            items.push({ label: 'Pets', path: '/pets' })
         }
 
         // TUTOR / ONG / ROOT → Admin de pets
@@ -53,6 +52,8 @@ export default function TopBar() {
                 currentUser.role === 'ROOT')
         ) {
             items.push({ label: 'Pets', path: '/pets/admin' })
+        } else {
+            items.push({ label: 'Pets', path: '/pets' })
         }
 
         // ROOT → gestão de ONGs e Tutores

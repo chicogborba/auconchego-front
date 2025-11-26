@@ -42,6 +42,10 @@ interface FormData {
 export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps) {
     const { addPet, updatePet } = usePets()
     const [loading, setLoading] = useState(false)
+    const [imageFile, setImageFile] = useState<File | null>(null)
+    const [imageUrl, setImageUrl] = useState<string | null>(null)
+    const [uploading, setUploading] = useState(false)
+
 
     const [formData, setFormData] = useState<FormData>({
         type: 'dog',
@@ -140,6 +144,24 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
         }
     }, [pet, isOpen])
 
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        try {
+            setUploading(true)
+            setImageFile(file)
+            const { url } = await api.uploadPetImage(file)
+            setImageUrl(url)
+        } catch (err) {
+            console.error('Erro ao enviar imagem', err)
+            alert('Não foi possível enviar a imagem. Tente novamente.')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
@@ -176,6 +198,12 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                         .filter(Boolean)
                     : [],
             }
+
+            if (imageUrl) {
+                // backend espera algo tipo string[] em `imagens`
+                ;(payload as any).imagens = [imageUrl]
+            }
+
 
             if (pet) {
                 await updatePet(pet.id, payload)
@@ -240,6 +268,34 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                             </button>
                         </div>
                     </div>
+
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-[#5C4A1F]">
+                            Imagem do pet
+                        </label>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            className="block w-full text-sm text-[#5C4A1F] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#FFBD59] file:text-[#5C4A1F] hover:file:bg-[#FFBD59]/90"
+                        />
+                        {uploading && (
+                            <p className="text-xs text-[#8B6914] mt-1">
+                                Enviando imagem...
+                            </p>
+                        )}
+                        {imageUrl && (
+                            <div className="mt-2">
+                                <p className="text-xs text-[#5C4A1F] mb-1">Pré-visualização:</p>
+                                <img
+                                    src={imageUrl}
+                                    alt="Pré-visualização do pet"
+                                    className="w-32 h-32 object-cover rounded-xl border border-[#5C4A1F]/20"
+                                />
+                            </div>
+                        )}
+                    </div>
+
 
                     {/* Nome */}
                     <div>

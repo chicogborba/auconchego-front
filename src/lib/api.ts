@@ -158,6 +158,26 @@ export async function createPet(payload: Record<string, any>) {
     return mapBackendToFrontend(data)
 }
 
+export async function uploadPetImage(file: File): Promise<{ url: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch(`${API_BASE}/upload/pet-image`, {
+        method: 'POST',
+        body: formData,
+    })
+
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(
+            `Failed to upload pet image: ${res.status} ${text}`,
+        )
+    }
+
+    return res.json() // { url }
+}
+
+
 export async function updatePet(id: number, payload: Record<string, any>) {
     // Support FormData (with files) or JSON
     if (payload instanceof FormData) {
@@ -711,6 +731,7 @@ export default {
     createPet,
     updatePet,
     deletePet,
+    uploadPetImage,
     getOngs,
     getOngById,
     createOng,
