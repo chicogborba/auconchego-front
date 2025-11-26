@@ -9,22 +9,27 @@ function mapBackendToFrontend(b: BackendPet) {
         type: (b.especie || '').toLowerCase().includes('gato') ? 'cat' : 'dog',
         name: b.nome ?? `Pet ${b.id}`,
         description: b.descricao ?? b.descricaoSaude ?? '',
-        images: (b.imagens && Array.isArray(b.imagens) && b.imagens.length > 0)
-            ? b.imagens
-            : ["/assets/icon.png"],
+        images:
+            b.imagens && Array.isArray(b.imagens) && b.imagens.length > 0
+                ? b.imagens
+                : ['/assets/icon.png'],
         tags: [
             b.porte ?? '',
+            b.raca ?? '',
             b.sexo ?? '',
-            b.idade ? `${b.idade} anos` : '',
-            b.peso ? `${b.peso} kg` : ''
+            b.necessidadesEspeciais ? 'Necessidades especiais' : '',
+            b.tratamentoContinuo ? 'Tratamento contínuo' : '',
+            b.doencaCronica ? 'Doença crônica' : '',
+            b.status ?? '',
+            b.peso ? `${b.peso} kg` : '',
         ].filter(Boolean),
         age: b.idade ?? '',
         size: b.porte
-            ? (b.porte === 'PEQUENO'
+            ? b.porte === 'PEQUENO'
                 ? 'Pequeno'
                 : b.porte === 'MEDIO'
                     ? 'Médio'
-                    : 'Grande')
+                    : 'Grande'
             : '',
         weight: b.peso ?? '',
         // Prefer local, then ong.endereco, finally empty string
@@ -33,10 +38,19 @@ function mapBackendToFrontend(b: BackendPet) {
         address: b.endereco ?? '',
         vaccinated: !!b.vacinado,
         castrated: !!b.castrado,
-        temperament: (b.temperamento && Array.isArray(b.temperamento)) ? b.temperamento : [],
-        healthStatus: b.descricaoSaude ?? ''
+        temperament:
+            b.temperamento && Array.isArray(b.temperamento)
+                ? b.temperamento
+                : [],
+        healthStatus: b.descricaoSaude ?? '',
+
+        // 🔥 extras que vamos usar no admin
+        idTutorOrigem: b.idTutorOrigem ?? null,
+        idOng: b.idOng ?? null,
+        status: b.status ?? '',
     }
 }
+
 
 /* ========= PETS ========= */
 
@@ -387,6 +401,101 @@ export async function adoptPet(petId: number, adotanteId?: number) {
     return res.json()
 }
 
+// Criar pedido de adoção (ADOTANTE)
+export async function createAdoptionRequest(
+    petId: number,
+    adotanteId: number,
+    message?: string,
+) {
+    const res = await fetch(`${API_BASE}/pets/${petId}/adoption-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            idAdotante: adotanteId,
+            message: message ?? '',
+        }),
+    })
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(
+            `Failed to create adoption request: ${res.status} ${text}`,
+        )
+    }
+    return res.json()
+}
+
+// Listar pedidos de adoção (com filtros opcionais)
+export async function getAdoptionRequests(params?: {
+    petId?: number
+    adotanteId?: number
+    status?: string
+}) {
+    const qs = new URLSearchParams()
+    if (params?.petId) qs.append('petId', String(params.petId))
+    if (params?.adotanteId) qs.append('adotanteId', String(params.adotanteId))
+    if (params?.status) qs.append('status', params.status)
+
+    const res = await fetch(
+        `${API_BASE}/adoption-requests${qs.toString() ? `?${qs.toString()}` : ''}`,
+    )
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(
+            `Failed to fetch adoption requests: ${res.status} ${text}`,
+        )
+    }
+    return res.json()
+}
+
+// Aprovar pedido (TUTOR ou ONG)
+export async function approveAdoptionRequest(
+    requestId: number,
+    payload: { responderId: number; responderType: 'TUTOR' | 'ONG' },
+) {
+    const res = await fetch(
+        `${API_BASE}/adoption-requests/${requestId}/approve`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    )
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(
+            `Failed to approve adoption request: ${res.status} ${text}`,
+        )
+    }
+    return res.json()
+}
+
+// Rejeitar pedido (TUTOR ou ONG)
+export async function rejectAdoptionRequest(
+    requestId: number,
+    payload: {
+        responderId: number
+        responderType: 'TUTOR' | 'ONG'
+        reason?: string
+    },
+) {
+    const res = await fetch(
+        `${API_BASE}/adoption-requests/${requestId}/reject`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    )
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(
+            `Failed to reject adoption request: ${res.status} ${text}`,
+        )
+    }
+    return res.json()
+}
+
+
 /* ========= HISTÓRICO DE LOCALIZAÇÃO ========= */
 
 export interface LocationHistoryEntry {
@@ -631,4 +740,8 @@ export default {
     getAcompanhamentoByTutor,
     getAcompanhamentoByPet,
     getAcompanhamentoAlertas,
+    createAdoptionRequest,
+    getAdoptionRequests,
+    approveAdoptionRequest,
+    rejectAdoptionRequest,
 }

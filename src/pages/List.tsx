@@ -74,15 +74,17 @@ export default function List() {
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {filteredPets.map((pet) => (
             <div key={pet.id} className="flex justify-center">
-              <AdoptCard
-                id={pet.id}
-                type={pet.type}
-                name={pet.name}
-                description={pet.description}
-                image={pet.images[0]}
-                tags={pet.tags}
-                compatibility={compatMap[pet.id]}
-              />
+                <AdoptCard
+                    id={pet.id}
+                    type={pet.type}
+                    name={pet.name}
+                    description={pet.description}
+                    image={pet.images[0]}
+                    tags={pet.tags}
+                    compatibility={compatMap[pet.id]}
+                    status={pet.status}   // 👈 vem do backend via mapBackendToFrontend
+                />
+
             </div>
           ))}
         </div>

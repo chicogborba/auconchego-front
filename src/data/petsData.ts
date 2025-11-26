@@ -22,6 +22,7 @@ export interface Pet {
   castrated: boolean
   temperament: string[]
   healthStatus: string
+    status?: string;
 }
 
 export const petsData: Record<string, Pet> = {

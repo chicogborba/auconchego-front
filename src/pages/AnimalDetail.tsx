@@ -50,23 +50,51 @@ export default function AnimalDetail() {
     )
   }
 
-  const handleAdopt = () => {
-    ;(async () => {
-      try {
-        const adotanteIdStr = localStorage.getItem('adotanteId')
-        const adotanteId = adotanteIdStr ? Number(adotanteIdStr) : undefined
-        await api.adoptPet(pet.id, adotanteId)
-        alert(`A adoção de ${pet.name} foi registrada com sucesso! Obrigado.`)
-        // After adoption, go to main page — main route is /main
-        navigate('/main')
-      } catch (err) {
-        console.error('Erro ao adotar', err)
-        alert('Não foi possível concluir a adoção. Tente novamente.')
-      }
-    })()
-  }
+    const handleAdopt = () => {
+        ;(async () => {
+            try {
+                const rawUser = localStorage.getItem('currentUser')
+                if (!rawUser) {
+                    alert('Você precisa estar logado como adotante para solicitar adoção.')
+                    return
+                }
 
-  return (
+                let adotanteId: number | undefined = undefined
+                try {
+                    const u = JSON.parse(rawUser)
+                    if (u.role === 'ADOTANTE' && u.id) {
+                        adotanteId = Number(u.id)
+                    }
+                } catch {
+                    // ignore
+                }
+
+                // 🔒 Se não for ADOTANTE, tchau
+                if (!adotanteId) {
+                    alert('Somente adotantes podem solicitar adoção.')
+                    return
+                }
+
+                await api.createAdoptionRequest(
+                    pet.id,
+                    adotanteId,
+                    'Gostaria de adotar este pet',
+                )
+
+                alert(
+                    `Pedido de adoção para ${pet.name} enviado! Agora o tutor/ONG precisa aprovar.`,
+                )
+                navigate('/main')
+            } catch (err) {
+                console.error('Erro ao solicitar adoção', err)
+                alert('Não foi possível enviar o pedido. Tente novamente.')
+            }
+        })()
+    }
+
+
+
+    return (
     <div className="min-h-screen bg-[#FFF1BA]">
       <TopBar />
 
