@@ -39,11 +39,6 @@ export default function TopBar() {
         // sempre visíveis
         items.push({ label: 'Principal', path: '/main' })
 
-        // ADOTANTE
-        if (currentUser?.role === 'ADOTANTE') {
-            items.push({ label: 'Meus adotados', path: '/meus-adotados' })
-        }
-
         // TUTOR / ONG / ROOT → Admin de pets
         if (
             currentUser &&
@@ -54,6 +49,10 @@ export default function TopBar() {
             items.push({ label: 'Pets', path: '/pets/admin' })
         } else {
             items.push({ label: 'Pets', path: '/pets' })
+        }
+
+        if (currentUser?.role === 'ADOTANTE') {
+            items.push({ label: 'Meus adotados', path: '/meus-adotados' })
         }
 
         // ROOT → gestão de ONGs e Tutores

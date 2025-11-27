@@ -455,7 +455,7 @@ export default function Login() {
                     {/* Senha – só obrigatória pro ROOT */}
                     <Input
                         type="password"
-                        placeholder={loginRole === 'ROOT' ? 'Senha do administrador' : 'Senha (não usada para este login)'}
+                        placeholder={loginRole === 'ROOT' ? 'Senha do administrador' : 'Senha'}
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                         required={loginRole === 'ROOT'}

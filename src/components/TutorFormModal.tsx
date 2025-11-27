@@ -147,6 +147,16 @@ export default function TutorFormModal({ isOpen, onClose, tutor, onSaved }: Prop
             />
           </div>
 
+            <div>
+                <Label htmlFor="endereco" className="text-[#5C4A1F] font-semibold mb-2 block">
+                    Senha
+                </Label>
+                <Input
+                    id="senha"
+                    className="h-12 bg-[#FFF1BA] border-2 border-[#5C4A1F] rounded-xl text-[#5C4A1F] focus:ring-2 focus:ring-[#FFBD59] focus:border-[#FFBD59]"
+                />
+            </div>
+
           {/* Cidade, Estado e CEP */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
