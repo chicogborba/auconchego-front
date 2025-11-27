@@ -26,7 +26,7 @@ export default function List() {
         especie: 'Todos',
         porte: 'Todos',
         sexo: 'Todos',
-        status: 'DISPONIVEL',
+        status: 'Todos', // Mostrar todos os status por padrão (incluindo RESERVADO)
         vacinado: 'Todos',
         castrado: 'Todos',
         localizacao: '',
@@ -174,7 +174,7 @@ export default function List() {
             especie: 'Todos',
             porte: 'Todos',
             sexo: 'Todos',
-            status: 'DISPONIVEL',
+            status: 'Todos', // Mostrar todos os status por padrão (incluindo RESERVADO)
             vacinado: 'Todos',
             castrado: 'Todos',
             localizacao: '',

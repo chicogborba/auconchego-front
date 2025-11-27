@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import * as api from '@/lib/api'
 import TutorFormModal from '@/components/TutorFormModal'
+import CompatibilidadeModal, { type CompatibilidadeData } from '@/components/CompatibilidadeModal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import TopBar from '@/components/TopBar'
@@ -27,15 +28,10 @@ export default function Login() {
   const [registerCidade, setRegisterCidade] = useState('')
   const [registerEstado, setRegisterEstado] = useState('')
   const [registerCEP, setRegisterCEP] = useState('')
-  const [registerEspecieDesejada, setRegisterEspecieDesejada] = useState('')
   const [tutorModalOpen, setTutorModalOpen] = useState(false)
   const [tutorPreset, setTutorPreset] = useState<any | null>(null)
-  
-  // Campos de compatibilidade
-  const [registerTemOutrosAnimais, setRegisterTemOutrosAnimais] = useState('')
-  const [registerTipoMoradia, setRegisterTipoMoradia] = useState('')
-  const [registerTempoCasa, setRegisterTempoCasa] = useState('')
-  const [registerExperiencia, setRegisterExperiencia] = useState('')
+  const [compatibilidadeModalOpen, setCompatibilidadeModalOpen] = useState(false)
+  const [compatibilidadeData, setCompatibilidadeData] = useState<CompatibilidadeData | null>(null)
 
     const handleLogin = (e: FormEvent) => {
         e.preventDefault()
@@ -139,10 +135,21 @@ export default function Login() {
     }
 
 
+    const handleCompatibilidadeSave = (data: CompatibilidadeData) => {
+      setCompatibilidadeData(data)
+    }
+
     const handleRegister = (e: FormEvent) => {
     e.preventDefault()
     // Simulação de cadastro
-    if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP && registerEspecieDesejada) {
+    if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP) {
+      // Verifica se as preferências foram preenchidas
+      if (!compatibilidadeData || !compatibilidadeData.especieDesejada) {
+        showAlert('Preferências necessárias', 'Por favor, preencha as preferências de compatibilidade.', 'warning', () => {
+          setCompatibilidadeModalOpen(true)
+        })
+        return
+      }
       ;(async () => {
         try {
           const nomeFull = `${registerName} ${registerLastName}`.trim()
@@ -155,17 +162,44 @@ export default function Login() {
             cidade: registerCidade,
             estado: registerEstado,
             cep: unmaskCEP(registerCEP), // Remove máscara antes de enviar
-            especieDesejada: registerEspecieDesejada,
+            especieDesejada: compatibilidadeData.especieDesejada,
             possuiDisponibilidade: true,
             // Novos campos de compatibilidade - só inclui se tiver valor
-            temOutrosAnimais: registerTemOutrosAnimais === 'sim',
+            temOutrosAnimais: compatibilidadeData.temOutrosAnimais === 'sim',
+            // Usar cidade como preferência de localização para cálculo de compatibilidade
+            preferLocalizacao: registerCidade || undefined,
           }
           
           // Adiciona campos opcionais apenas se tiverem valor
-          if (registerTipoMoradia) payload.tipoMoradia = registerTipoMoradia
-          if (registerTempoCasa) payload.tempoCasa = registerTempoCasa
-          if (registerExperiencia === 'sim' || registerExperiencia === 'nao') {
-            payload.experiencia = registerExperiencia === 'sim'
+          if (compatibilidadeData.tipoMoradia) payload.tipoMoradia = compatibilidadeData.tipoMoradia
+          if (compatibilidadeData.tempoCasa) payload.tempoCasa = compatibilidadeData.tempoCasa
+          if (compatibilidadeData.experiencia === 'sim' || compatibilidadeData.experiencia === 'nao') {
+            payload.experiencia = compatibilidadeData.experiencia === 'sim'
+          }
+          if (compatibilidadeData.preferVacinado === 'sim' || compatibilidadeData.preferVacinado === 'nao') {
+            payload.preferVacinado = compatibilidadeData.preferVacinado === 'sim'
+          }
+          if (compatibilidadeData.preferCastrado === 'sim' || compatibilidadeData.preferCastrado === 'nao') {
+            payload.preferCastrado = compatibilidadeData.preferCastrado === 'sim'
+          }
+          if (compatibilidadeData.preferTemperamento && compatibilidadeData.preferTemperamento.trim()) {
+            // Divide por vírgula e limpa espaços
+            payload.preferTemperamento = compatibilidadeData.preferTemperamento
+              .split(',')
+              .map(t => t.trim())
+              .filter(t => t.length > 0)
+          }
+          if (compatibilidadeData.idadeMinima && !isNaN(Number(compatibilidadeData.idadeMinima))) {
+            payload.idadeMinima = Number(compatibilidadeData.idadeMinima)
+          }
+          if (compatibilidadeData.idadeMaxima && !isNaN(Number(compatibilidadeData.idadeMaxima))) {
+            payload.idadeMaxima = Number(compatibilidadeData.idadeMaxima)
+          }
+          if (compatibilidadeData.pesoMinimo && !isNaN(Number(compatibilidadeData.pesoMinimo))) {
+            payload.pesoMinimo = Number(compatibilidadeData.pesoMinimo)
+          }
+          if (compatibilidadeData.pesoMaximo && !isNaN(Number(compatibilidadeData.pesoMaximo))) {
+            payload.pesoMaximo = Number(compatibilidadeData.pesoMaximo)
           }
           const created = await api.createAdotante(payload)
           // store adotante id locally for compatibility calculations
@@ -180,6 +214,15 @@ export default function Login() {
               email: created.email,
             }
             localStorage.setItem('currentUser', JSON.stringify(currentUser))
+            
+            // Calcular compatibilidade para todos os pets após cadastro
+            try {
+              await api.getAdotanteCompatibility(created.id)
+              console.log('Compatibilidade calculada com sucesso para o novo adotante')
+            } catch (compatError) {
+              console.warn('Erro ao calcular compatibilidade (não crítico):', compatError)
+              // Não bloqueia o cadastro se o cálculo falhar
+            }
             
             showAlert('Cadastro realizado!', 'Cadastro realizado com sucesso! Redirecionando...', 'success', () => {
                 window.location.href = '/main'
@@ -318,72 +361,20 @@ export default function Login() {
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
 
-              {/* Filtro de compatibilidade */}
+              {/* Botão para abrir modal de compatibilidade */}
               <div className="pt-4 border-t border-[#E8B563]/50">
-                <h3 className="text-lg font-semibold text-[#5C4A1F] mb-3 text-center">
-                  Compatibilidade com pets
-                </h3>
-
-                <div className="space-y-3">
-                  {/* Espécie Desejada - OBRIGATÓRIO */}
-                  <select
-                    value={registerEspecieDesejada}
-                    onChange={(e) => setRegisterEspecieDesejada(e.target.value)}
-                    required
-                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                  >
-                    <option value="" disabled>Espécie desejada *</option>
-                    <option value="Cachorro">Cachorro</option>
-                    <option value="Gato">Gato</option>
-                  </select>
-
-                  {/* Possui outros animais */}
-                  <select
-                    value={registerTemOutrosAnimais}
-                    onChange={(e) => setRegisterTemOutrosAnimais(e.target.value)}
-                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                  >
-                    <option value="" disabled>Você possui outros animais?</option>
-                    <option value="sim">Sim</option>
-                    <option value="nao">Não</option>
-                  </select>
-
-                  {/* Tipo de moradia */}
-                  <select
-                    value={registerTipoMoradia}
-                    onChange={(e) => setRegisterTipoMoradia(e.target.value)}
-                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                  >
-                    <option value="" disabled>Tipo de moradia</option>
-                    <option value="apartamento">Apartamento</option>
-                    <option value="casa">Casa com quintal</option>
-                    <option value="chacara">Chácara / sítio</option>
-                  </select>
-
-                  {/* Tempo em casa */}
-                  <select
-                    value={registerTempoCasa}
-                    onChange={(e) => setRegisterTempoCasa(e.target.value)}
-                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                  >
-                    <option value="" disabled>Tempo que passa em casa por dia</option>
-                    <option value="baixo">Menos de 4h</option>
-                    <option value="medio">4 a 8h</option>
-                    <option value="alto">Mais de 8h</option>
-                  </select>
-
-                  {/* Experiência */}
-                  <select
-                    value={registerExperiencia}
-                    onChange={(e) => setRegisterExperiencia(e.target.value)}
-                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] appearance-none transition-all"
-                  >
-                    <option value="" disabled>Já teve pets antes?</option>
-                    <option value="sim">Sim</option>
-                    <option value="nao">Não</option>
-                  </select>
-                 
-                </div>
+                <Button
+                  type="button"
+                  onClick={() => setCompatibilidadeModalOpen(true)}
+                  className="w-full h-12 md:h-14 bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] font-bold text-lg md:text-xl rounded-2xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all"
+                >
+                  {compatibilidadeData?.especieDesejada ? '✓ Preferências preenchidas' : 'Preencher preferências de compatibilidade'}
+                </Button>
+                {compatibilidadeData?.especieDesejada && (
+                  <p className="text-sm text-[#8B6914] mt-2 text-center">
+                    Espécie: {compatibilidadeData.especieDesejada}
+                  </p>
+                )}
               </div>
 
               {/* Botão Cadastro */}
@@ -391,7 +382,7 @@ export default function Login() {
                 type="submit"
                 className="w-full h-12 md:h-14 bg-[#F5B563] hover:bg-[#E8A550] text-[#5C4A1F] font-bold text-lg md:text-xl rounded-2xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                Cadastro
+                Criar como Adotante
               </Button>
               <div className="mt-3">
                 <Button type="button" onClick={handleCreateTutorFromRegister} className="w-full h-12 md:h-14 bg-[#8B6914] hover:bg-[#6f5310] text-white font-bold text-lg md:text-xl rounded-2xl border-2 border-[#5C4A1F] shadow-md">Criar como Tutor</Button>
@@ -501,6 +492,13 @@ export default function Login() {
             showAlert('Tutor criado!', 'Tutor criado com sucesso!', 'success')
           }
         }} 
+      />
+
+      <CompatibilidadeModal
+        isOpen={compatibilidadeModalOpen}
+        onClose={() => setCompatibilidadeModalOpen(false)}
+        onSave={handleCompatibilidadeSave}
+        initialData={compatibilidadeData || undefined}
       />
 
       {/* Alert Modal */}

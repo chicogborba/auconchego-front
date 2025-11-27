@@ -3,7 +3,7 @@ import TopBar from '@/components/TopBar'
 import { usePets } from '@/contexts/PetsContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Pencil, Trash2, Cat, Dog, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Cat, Dog, Check, X, RefreshCw, History } from 'lucide-react'
 import PetFormModal from '@/components/PetFormModal'
 import type { Pet } from '@/data/petsData'
 import * as api from '@/lib/api'
@@ -62,6 +62,18 @@ function formatPetStatus(status?: string): string {
     }
 }
 
+function formatDateRange(startIso: string, endIso?: string | null) {
+    if (!startIso) return ''
+    const start = new Date(startIso)
+    const end = endIso ? new Date(endIso) : null
+    const fmt = (d: Date) =>
+        d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    if (end && !Number.isNaN(end.getTime()) && end.getTime() !== start.getTime()) {
+        return `${fmt(start)} → ${fmt(end)}`
+    }
+    return fmt(start)
+}
+
 
 export default function PetsAdmin() {
     const { pets, deletePet } = usePets()
@@ -70,11 +82,27 @@ export default function PetsAdmin() {
     const [editingPet, setEditingPet] = useState<Pet | null>(null)
     const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; petId: number | null }>({ isOpen: false, petId: null })
+    const [allPetsAdmin, setAllPetsAdmin] = useState<Pet[]>([])
 
     const [adoptionByPet, setAdoptionByPet] = useState<
         Record<number, AdoptionRequestWithAdopter[]>
     >({})
     const [loadingRequests, setLoadingRequests] = useState(false)
+    
+    // Estado para modal de histórico
+    const [historyModal, setHistoryModal] = useState<{ isOpen: boolean; petId: number | null }>({ isOpen: false, petId: null })
+    const [petHistory, setPetHistory] = useState<any[]>([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+
+    // Função para recarregar todos os pets
+    const reloadPets = async () => {
+        try {
+            const allPets = await api.getAllPets()
+            setAllPetsAdmin(allPets)
+        } catch (e) {
+            console.error('Erro ao carregar todos os pets:', e)
+        }
+    }
 
     useEffect(() => {
         const user = readCurrentUser()
@@ -85,6 +113,20 @@ export default function PetsAdmin() {
             showAlert('Acesso negado', 'Apenas tutores, ONGs e administradores podem acessar esta área.', 'error', () => {
                 window.location.href = '/main'
             })
+            return
+        }
+
+        // Buscar todos os pets para admin (não apenas DISPONIVEL)
+        reloadPets()
+
+        // Recarregar pets quando a página recebe foco (útil quando voltar de outra aba)
+        const handleFocus = () => {
+            reloadPets()
+        }
+        window.addEventListener('focus', handleFocus)
+
+        return () => {
+            window.removeEventListener('focus', handleFocus)
         }
     }, [])
 
@@ -118,7 +160,8 @@ export default function PetsAdmin() {
         setEditingPet(null)
     }
 
-    const allPets = Object.values(pets)
+    // Usar allPetsAdmin se disponível, senão usar pets do contexto
+    const allPets = allPetsAdmin.length > 0 ? allPetsAdmin : Object.values(pets)
 
     // 🔍 pets visíveis pro usuário atual
     const visiblePets = useMemo(() => {
@@ -126,7 +169,15 @@ export default function PetsAdmin() {
 
         // TUTOR vê só pets em que ele é tutor de origem
         if (currentUser.role === 'TUTOR') {
-            return allPets.filter((p: any) => p.tutorId === currentUser.id)
+            const filtered = allPets.filter((p: any) => {
+                const matches = p.tutorId === currentUser.id
+                if (!matches && p.tutorId) {
+                    console.log(`Pet ${p.id} (${p.name}) - tutorId: ${p.tutorId}, currentUser.id: ${currentUser.id}`)
+                }
+                return matches
+            })
+            console.log(`TUTOR ${currentUser.id} (${currentUser.nome}): ${filtered.length} pets de ${allPets.length} totais`)
+            return filtered
         }
 
         // ONG vê só pets da própria ONG
@@ -197,9 +248,28 @@ export default function PetsAdmin() {
                 responderType: currentUser.role === 'TUTOR' ? 'TUTOR' : 'ONG',
             })
             setApproveConfirm({ isOpen: false, requestId: null, petId: null })
-            showAlert('Pedido aprovado!', 'Pedido aprovado com sucesso!', 'success', () => {
-                window.location.reload()
+            // Recarregar pets e pedidos após aprovar
+            await reloadPets()
+            // Recarregar pedidos também
+            const [requests, adotantes] = await Promise.all([
+                api.getAdoptionRequests({ status: 'PENDENTE' }),
+                api.getAdotantes(),
+            ])
+            const adotantesById: Record<number, any> = {}
+            adotantes.forEach((a: any) => {
+                adotantesById[a.id] = a
             })
+            const byPet: Record<number, AdoptionRequestWithAdopter[]> = {}
+            requests.forEach((req: any) => {
+                const enriched: AdoptionRequestWithAdopter = {
+                    ...req,
+                    adotante: adotantesById[req.adotanteId],
+                }
+                if (!byPet[req.petId]) byPet[req.petId] = []
+                byPet[req.petId].push(enriched)
+            })
+            setAdoptionByPet(byPet)
+            showAlert('Pedido aprovado!', 'Pedido aprovado com sucesso!', 'success')
         } catch (e) {
             console.error('Erro ao aprovar pedido:', e)
             showAlert('Erro', 'Não foi possível aprovar o pedido.', 'error')
@@ -227,17 +297,28 @@ export default function PetsAdmin() {
             })
             const petId = rejectModal.petId
             setRejectModal({ isOpen: false, requestId: null, petId: null, reason: '' })
+            // Recarregar pets e pedidos após rejeitar
+            await reloadPets()
+            // Recarregar pedidos também
+            const [requests, adotantes] = await Promise.all([
+                api.getAdoptionRequests({ status: 'PENDENTE' }),
+                api.getAdotantes(),
+            ])
+            const adotantesById: Record<number, any> = {}
+            adotantes.forEach((a: any) => {
+                adotantesById[a.id] = a
+            })
+            const byPet: Record<number, AdoptionRequestWithAdopter[]> = {}
+            requests.forEach((req: any) => {
+                const enriched: AdoptionRequestWithAdopter = {
+                    ...req,
+                    adotante: adotantesById[req.adotanteId],
+                }
+                if (!byPet[req.petId]) byPet[req.petId] = []
+                byPet[req.petId].push(enriched)
+            })
+            setAdoptionByPet(byPet)
             showAlert('Pedido rejeitado', 'Pedido rejeitado com sucesso.', 'success')
-
-            // atualiza apenas a lista local
-            if (petId) {
-                setAdoptionByPet(prev => {
-                    const copy = { ...prev }
-                    const list = copy[petId] || []
-                    copy[petId] = list.filter(r => r.id !== rejectModal.requestId)
-                    return copy
-                })
-            }
         } catch (e) {
             console.error('Erro ao rejeitar pedido:', e)
             showAlert('Erro', 'Não foi possível rejeitar o pedido.', 'error')
@@ -453,21 +534,58 @@ export default function PetsAdmin() {
 
                                         {/* Ações básicas */}
                                         <div className="flex flex-col gap-3">
+                                            {/* Botão para ver histórico - sempre visível */}
                                             <Button
-                                                onClick={() => handleEdit(pet)}
-                                                className="bg-[#5C4A1F] hover:bg-[#4C3A0F] text-white font-medium px-6 py-3 rounded-xl"
+                                                onClick={async () => {
+                                                    setHistoryModal({ isOpen: true, petId: pet.id })
+                                                    setLoadingHistory(true)
+                                                    try {
+                                                        const history = await api.getLocationHistoryByPet(pet.id)
+                                                        setPetHistory(history)
+                                                    } catch (err) {
+                                                        console.error('Erro ao carregar histórico:', err)
+                                                        setPetHistory([])
+                                                    } finally {
+                                                        setLoadingHistory(false)
+                                                    }
+                                                }}
+                                                className="bg-[#8B6914] hover:bg-[#7A5A0F] text-white font-medium px-6 py-3 rounded-xl"
                                             >
-                                                <Pencil className="w-5 h-5 mr-2" />
-                                                Editar
+                                                <History className="w-5 h-5 mr-2" />
+                                                Ver Histórico
                                             </Button>
-                                            <Button
-                                                onClick={() => handleDelete(pet.id)}
-                                                variant="destructive"
-                                                className="bg-red-500 hover:bg-red-600 text-white font-medium px-6 py-3 rounded-xl"
-                                            >
-                                                <Trash2 className="w-5 h-5 mr-2" />
-                                                Deletar
-                                            </Button>
+                                            
+                                            {/* Se pet está ADOTADO, apenas o adotante pode editar */}
+                                            {/* Tutor de origem não pode mais editar pets adotados */}
+                                            {pet.status === 'ADOTADO' ? (
+                                                currentUser?.role === 'ADOTANTE' && pet.adopterId === currentUser.id && (
+                                                    <Button
+                                                        onClick={() => handleEdit(pet)}
+                                                        className="bg-[#5C4A1F] hover:bg-[#4C3A0F] text-white font-medium px-6 py-3 rounded-xl"
+                                                    >
+                                                        <Pencil className="w-5 h-5 mr-2" />
+                                                        Editar
+                                                    </Button>
+                                                )
+                                            ) : (
+                                                <>
+                                                    <Button
+                                                        onClick={() => handleEdit(pet)}
+                                                        className="bg-[#5C4A1F] hover:bg-[#4C3A0F] text-white font-medium px-6 py-3 rounded-xl"
+                                                    >
+                                                        <Pencil className="w-5 h-5 mr-2" />
+                                                        Editar
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => handleDelete(pet.id)}
+                                                        variant="destructive"
+                                                        className="bg-red-500 hover:bg-red-600 text-white font-medium px-6 py-3 rounded-xl"
+                                                    >
+                                                        <Trash2 className="w-5 h-5 mr-2" />
+                                                        Deletar
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </CardContent>
@@ -489,7 +607,13 @@ export default function PetsAdmin() {
             {/* Modal */}
             <PetFormModal
                 isOpen={isModalOpen}
-                onClose={handleCloseModal}
+                onClose={() => {
+                    handleCloseModal()
+                    // Recarregar após fechar o modal para garantir que novos pets apareçam
+                    setTimeout(() => {
+                        window.location.reload()
+                    }, 300)
+                }}
                 pet={editingPet}
             />
 
@@ -502,6 +626,79 @@ export default function PetsAdmin() {
                 type={alert.type}
                 onConfirm={alert.onConfirm}
             />
+
+            {/* Histórico Modal */}
+            {historyModal.isOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    onClick={() => setHistoryModal({ isOpen: false, petId: null })}
+                >
+                    <Card 
+                        className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <History className="w-6 h-6 text-[#5C4A1F]" />
+                                    <h2 className="text-2xl font-bold text-[#5C4A1F]">Histórico de Rastreabilidade</h2>
+                                </div>
+                                <Button
+                                    onClick={() => setHistoryModal({ isOpen: false, petId: null })}
+                                    className="bg-[#5C4A1F] hover:bg-[#4C3A0F] text-white rounded-lg"
+                                >
+                                    <X className="w-5 h-5" />
+                                </Button>
+                            </div>
+                            
+                            {loadingHistory ? (
+                                <p className="text-[#8B6914] text-center py-8">Carregando histórico...</p>
+                            ) : petHistory.length === 0 ? (
+                                <p className="text-[#8B6914] text-center py-8">
+                                    Ainda não há ações registradas para este pet.
+                                </p>
+                            ) : (
+                                <div className="space-y-4">
+                                    {petHistory
+                                        .slice()
+                                        .sort(
+                                            (a, b) =>
+                                                new Date((a as any).dataInicio as string).getTime() -
+                                                new Date((b as any).dataInicio as string).getTime(),
+                                        )
+                                        .map((item, index) => (
+                                            <div
+                                                key={item.id ?? index}
+                                                className="bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 rounded-xl p-4"
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-bold text-[#5C4A1F] text-lg mb-1">
+                                                            {(item as any).local || (item as any).tipo || 'Ação'}
+                                                        </h3>
+                                                        {(item as any).descricao && (
+                                                            <p className="text-[#5C4A1F] text-sm mb-2">
+                                                                {(item as any).descricao}
+                                                            </p>
+                                                        )}
+                                                        <div className="text-xs text-[#8B6914]">
+                                                            <span>
+                                                                {formatDateRange(
+                                                                    (item as any).dataInicio,
+                                                                    (item as any).dataFim
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Delete Confirmation Modal */}
             <AlertModal

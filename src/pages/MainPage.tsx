@@ -47,9 +47,13 @@ export default function MainPage() {
     setCurrentUser(readCurrentUser())
   }, [])
   
-  // Converte o objeto de pets em array para mapear e filtra apenas DISPONIVEL
+  // Converte o objeto de pets em array para mapear e filtra DISPONIVEL e RESERVADO (mas não ADOTADO)
   const pets = Object.values(petsData)
-    .filter(pet => pet.status === 'DISPONIVEL' || !pet.status)
+    .filter(pet => {
+      // Mostrar apenas pets DISPONIVEL e RESERVADO (não mostrar ADOTADO)
+      const status = pet.status || 'DISPONIVEL'
+      return status === 'DISPONIVEL' || status === 'RESERVADO'
+    })
     .map(pet => ({
       id: pet.id,
       type: pet.type,

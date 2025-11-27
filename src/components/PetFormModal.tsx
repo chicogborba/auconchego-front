@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { X, Loader2 } from 'lucide-react'
+import AlertModal from '@/components/AlertModal'
+import { useAlert } from '@/hooks/useAlert'
 
 interface PetFormModalProps {
     isOpen: boolean
@@ -41,6 +43,7 @@ interface FormData {
 
 export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps) {
     const { addPet, updatePet } = usePets()
+    const { alert, showAlert, closeAlert } = useAlert()
     const [loading, setLoading] = useState(false)
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -71,19 +74,64 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
         temperamentText: '',
     })
 
-    const [ongs, setOngs] = useState<any[]>([])
-    const [tutors, setTutors] = useState<any[]>([])
-
+    // Preencher idOng e idTutorOrigem automaticamente baseado no usuário logado
+    // Executar sempre que o modal abrir (isOpen) para garantir que os valores sejam preenchidos
     useEffect(() => {
+        if (!isOpen) return // Não fazer nada se o modal estiver fechado
+        
         let mounted = true
-        api.getOngs().then(data => {
-            if (mounted) setOngs(data)
-        }).catch(err => {
-            console.warn('Failed to load ONGs', err)
-        })
-        api.getTutors().then(d => { if (mounted) setTutors(d) }).catch(() => {})
+        try {
+            const rawUser = localStorage.getItem('currentUser')
+            console.log('🔍 useEffect - Modal aberto, lendo usuário:', rawUser)
+            if (rawUser) {
+                const user = JSON.parse(rawUser)
+                console.log('🔍 useEffect - Usuário parseado:', user)
+                if (user.role === 'ONG' && user.id) {
+                    // Se for ONG, usar o próprio ID como idOng
+                    if (mounted) {
+                        setFormData(prev => {
+                            // Só atualizar se ainda não tiver valor (para não sobrescrever ao editar)
+                            if (!prev.idOng || !pet) {
+                                console.log('✅ useEffect - Preenchendo idOng para ONG:', user.id)
+                                return { ...prev, idOng: user.id }
+                            }
+                            return prev
+                        })
+                    }
+                } else if (user.role === 'TUTOR') {
+                    // Se for tutor, usar o próprio ID como tutorId e o idOng do tutor
+                    if (user.id && mounted) {
+                        setFormData(prev => {
+                            if (!prev.idTutorOrigem || !pet) {
+                                console.log('✅ useEffect - Preenchendo idTutorOrigem para TUTOR:', user.id)
+                                return { ...prev, idTutorOrigem: user.id }
+                            }
+                            return prev
+                        })
+                    }
+                    if (user.idOng && mounted) {
+                        setFormData(prev => {
+                            if (!prev.idOng || !pet) {
+                                console.log('✅ useEffect - Preenchendo idOng para TUTOR:', user.idOng)
+                                return { ...prev, idOng: user.idOng }
+                            }
+                            return prev
+                        })
+                    } else {
+                        console.warn('⚠️ useEffect - TUTOR não tem idOng no localStorage:', user)
+                    }
+                } else {
+                    console.warn('⚠️ useEffect - Role não reconhecido:', user.role)
+                }
+            } else {
+                console.warn('⚠️ useEffect - Nenhum usuário encontrado no localStorage')
+            }
+        } catch (err) {
+            console.error('❌ useEffect - Erro ao ler usuário do localStorage', err)
+        }
+        
         return () => { mounted = false }
-    }, [])
+    }, [isOpen, pet]) // Executar quando o modal abrir ou quando o pet mudar
 
     useEffect(() => {
         if (pet) {
@@ -168,6 +216,50 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
         setLoading(true)
 
         try {
+            // SEMPRE buscar do localStorage para garantir que temos os valores corretos
+            // Não confiar apenas no formData, pois pode não ter sido preenchido pelo useEffect
+            let finalIdOng: number | undefined = undefined
+            let finalTutorId: number | undefined = undefined
+
+            try {
+                const rawUser = localStorage.getItem('currentUser')
+                console.log('🔍 Usuário do localStorage:', rawUser)
+                if (rawUser) {
+                    const user = JSON.parse(rawUser)
+                    console.log('🔍 Usuário parseado:', user)
+                    
+                    if (user.role === 'ONG' && user.id) {
+                        finalIdOng = Number(user.id)
+                        console.log('✅ ONG identificada, idOng:', finalIdOng)
+                    } else if (user.role === 'TUTOR') {
+                        if (user.id) {
+                            finalTutorId = Number(user.id)
+                            console.log('✅ Tutor identificado, tutorId:', finalTutorId)
+                        }
+                        if (user.idOng) {
+                            finalIdOng = Number(user.idOng)
+                            console.log('✅ ONG do tutor identificada, idOng:', finalIdOng)
+                        } else {
+                            console.warn('⚠️ Tutor não tem idOng no localStorage')
+                        }
+                    } else {
+                        console.warn('⚠️ Role não reconhecido:', user.role)
+                    }
+                } else {
+                    console.warn('⚠️ Nenhum usuário encontrado no localStorage')
+                }
+            } catch (err) {
+                console.error('❌ Erro ao ler usuário do localStorage', err)
+            }
+
+            console.log('🔍 Valores finais antes de validar:', { finalIdOng, finalTutorId })
+
+            // idOng é opcional - tutor pode não ter ONG vinculada
+            // Não validar se não existir, apenas logar
+            if (!finalIdOng) {
+                console.log('ℹ️ idOng não encontrado - tutor pode não ter ONG vinculada (opcional)')
+            }
+
             // Build payload em formato de frontend — api.createPet/updatePet mapeia pro backend
             const payload: Record<string, any> = {
                 name: formData.name,
@@ -182,9 +274,9 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                 necessidadesEspeciais: !!formData.necessidadesEspeciais,
                 tratamentoContinuo: !!formData.tratamentoContinuo,
                 doencaCronica: !!formData.doencaCronica,
-                tutorId: formData.idTutorOrigem,
-                adotanteId: formData.idTutorAdotante,
-                idOng: formData.idOng ?? undefined,
+                tutorId: finalTutorId, // Preenchido automaticamente se for tutor
+                // adotanteId não é necessário no cadastro
+                // idOng é opcional - só incluir se existir
 
                 // 👇 NOVOS CAMPOS
                 idade: formData.idade && formData.idade.trim() !== '' ? Number(formData.idade) : undefined,
@@ -205,7 +297,14 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                 ;(payload as any).imagens = [imageUrl]
             }
 
-            console.log('PAYLOAD ENVIADO:', payload)
+            // Incluir idOng apenas se existir (opcional)
+            if (finalIdOng !== undefined && finalIdOng !== null) {
+                payload.idOng = finalIdOng
+            }
+
+            console.log('📤 PAYLOAD ENVIADO:', payload)
+            console.log('📤 idOng no payload:', payload.idOng)
+            console.log('📤 tutorId no payload:', payload.tutorId)
 
 
             if (pet) {
@@ -215,6 +314,11 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
             }
 
             onClose()
+            // Forçar atualização da página após salvar para garantir que a lista seja atualizada
+            // Isso é necessário porque o PetsContext pode não estar sincronizado com o backend
+            setTimeout(() => {
+                window.location.reload()
+            }, 500)
         } catch (error) {
             console.error('Erro ao salvar pet:', error)
             // Erro será tratado pelo componente pai ou pode adicionar um toast aqui
@@ -256,7 +360,7 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                                         : 'bg-[#FFF1BA] text-[#8B6914] border-2 border-[#5C4A1F]/20'
                                 }`}
                             >
-                                🐕 Cachorro
+                                Cachorro
                             </button>
                             <button
                                 type="button"
@@ -267,7 +371,7 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                                         : 'bg-[#FFF1BA] text-[#8B6914] border-2 border-[#5C4A1F]/20'
                                 }`}
                             >
-                                🐱 Gato
+                                Gato
                             </button>
                         </div>
                     </div>
@@ -368,78 +472,6 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                                 <option value="DISPONIVEL">Disponível</option>
                                 <option value="ADOTADO">Adotado</option>
                                 <option value="RESERVADO">Reservado</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <Label htmlFor="idTutorOrigem" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                                Tutor de Origem
-                            </Label>
-                            <select
-                                id="idTutorOrigem"
-                                value={formData.idTutorOrigem ?? ''}
-                                onChange={(e) =>
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        idTutorOrigem: e.target.value ? Number(e.target.value) : undefined,
-                                    }))
-                                }
-                                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
-                            >
-                                <option value="">-- Selecionar tutor (opcional) --</option>
-                                {tutors.map(t => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.nome}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <Label htmlFor="idTutorAdotante" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                                Tutor Adotante
-                            </Label>
-                            <select
-                                id="idTutorAdotante"
-                                value={formData.idTutorAdotante ?? ''}
-                                onChange={(e) =>
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        idTutorAdotante: e.target.value ? Number(e.target.value) : undefined,
-                                    }))
-                                }
-                                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
-                            >
-                                <option value="">-- Selecionar tutor (opcional) --</option>
-                                {tutors.map(t => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.nome}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <Label htmlFor="idOng" className="text-[#5C4A1F] text-lg font-semibold mb-2 block">
-                                ONG
-                            </Label>
-                            <select
-                                id="idOng"
-                                value={formData.idOng ?? ''}
-                                onChange={(e) =>
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        idOng: e.target.value ? Number(e.target.value) : undefined,
-                                    }))
-                                }
-                                className="w-full bg-[#FFF1BA] border-2 border-[#5C4A1F]/20 text-[#5C4A1F] text-lg p-3 rounded-xl"
-                            >
-                                <option value="">-- Selecionar ONG (opcional) --</option>
-                                {ongs.map(o => (
-                                    <option key={o.id} value={o.id}>
-                                        {o.nome} ({o.cnpj})
-                                    </option>
-                                ))}
                             </select>
                         </div>
                     </div>
@@ -642,6 +674,16 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                     </div>
                 </form>
             </div>
+
+            {/* Alert Modal */}
+            <AlertModal
+                isOpen={alert.isOpen}
+                onClose={closeAlert}
+                title={alert.title}
+                message={alert.message}
+                type={alert.type}
+                onConfirm={alert.onConfirm}
+            />
         </div>
     )
 }

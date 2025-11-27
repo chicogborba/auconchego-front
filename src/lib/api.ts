@@ -42,7 +42,7 @@ function mapBackendToFrontend(b: BackendPet) {
             : '',
         weight: b.peso ?? '',
         location: b.local ?? b.ong?.endereco ?? '',
-        coordinates: b.coordenadas ?? { lat: 0, lng: 0 },
+        coordinates: b.coordenadas ?? (b.latitude && b.longitude ? { lat: b.latitude, lng: b.longitude } : { lat: 0, lng: 0 }),
         address: b.endereco ?? '',
         vaccinated: !!b.vacinado,
         castrated: !!b.castrado,
@@ -52,8 +52,8 @@ function mapBackendToFrontend(b: BackendPet) {
                 : [],
         healthStatus: b.descricaoSaude ?? '',
 
-        tutorId: b.tutorId ?? null,
-        adopterId: b.adotanteId ?? null,
+        tutorId: b.tutorId ?? b.tutorOrigem?.id ?? null,
+        adopterId: b.idAdotante ?? b.adotanteId ?? null,
         idOng: b.idOng ?? null,
         status: b.status ?? '',
     }
@@ -63,9 +63,18 @@ function mapBackendToFrontend(b: BackendPet) {
 
 /* ========= PETS ========= */
 
-export async function getPets() {
-    const res = await fetch(`${API_BASE}/pets`)
+export async function getPets(status?: string) {
+    const url = status ? `${API_BASE}/pets?status=${status}` : `${API_BASE}/pets`
+    const res = await fetch(url)
     if (!res.ok) throw new Error('Failed to fetch pets')
+    const data = await res.json()
+    return data.map(mapBackendToFrontend)
+}
+
+// Buscar todos os pets, independente do status (útil para admin)
+export async function getAllPets() {
+    const res = await fetch(`${API_BASE}/pets?status=`)
+    if (!res.ok) throw new Error('Failed to fetch all pets')
     const data = await res.json()
     return data.map(mapBackendToFrontend)
 }
@@ -104,14 +113,17 @@ export async function createPet(payload: Record<string, any>) {
         necessidadesEspeciais: !!payload.necessidadesEspeciais,
         tratamentoContinuo: !!payload.tratamentoContinuo,
         doencaCronica: !!payload.doencaCronica,
-        idOng: payload.idOng ?? undefined,
+        // idOng é opcional - só incluir se existir
+        ...(payload.idOng !== undefined && payload.idOng !== null ? { idOng: payload.idOng } : {}),
         // Optional extended fields from the form
         descricao: payload.descricao ?? payload.description ?? undefined,
         descricaoSaude: payload.descricaoSaude ?? payload.healthStatus ?? undefined,
         dataResgate: payload.dataResgate ? new Date(payload.dataResgate).toISOString() : undefined,
         status: payload.status ?? undefined,
-        tutorId: payload.tutorId ?? undefined,
-        adotanteId: payload.adotanteId ?? undefined,
+        // Mapear tutorId para idTutorOrigem (backend espera idTutorOrigem)
+        idTutorOrigem: payload.tutorId ?? payload.idTutorOrigem ?? undefined,
+        // Mapear adotanteId para idTutorAdotante (backend espera idTutorAdotante)
+        idTutorAdotante: payload.adotanteId ?? payload.idTutorAdotante ?? undefined,
     }
 
     // ---- NOVOS CAMPOS DO SCHEMA ----
@@ -229,8 +241,10 @@ export async function updatePet(id: number, payload: Record<string, any>) {
         body.dataResgate = new Date(payload.dataResgate).toISOString()
     }
     if (typeof payload.status !== 'undefined') body.status = payload.status
-    if (typeof payload.tutorId !== 'undefined') body.tutorId = payload.tutorId
-    if (typeof payload.adotanteId !== 'undefined') body.adotanteId = payload.adotanteId
+    // Mapear tutorId para idTutorOrigem (backend espera idTutorOrigem no update também)
+    if (typeof payload.tutorId !== 'undefined') body.idTutorOrigem = payload.tutorId
+    // Mapear adotanteId para idTutorAdotante (backend espera idTutorAdotante no update também)
+    if (typeof payload.adotanteId !== 'undefined') body.idTutorAdotante = payload.adotanteId
 
     // ---- NOVOS CAMPOS DO SCHEMA ----
     if (typeof payload.idade !== 'undefined' && payload.idade !== '') {
@@ -417,6 +431,35 @@ export async function createAdotante(payload: Record<string, any>) {
     return res.json()
 }
 
+export async function getAdotanteById(id: number) {
+    const res = await fetch(`${API_BASE}/adotantes/${id}`)
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Failed to fetch adotante: ${res.status} ${text}`)
+    }
+    return res.json()
+}
+
+export async function updateAdotante(id: number, payload: Record<string, any>) {
+    const res = await fetch(`${API_BASE}/adotantes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+        let errorMessage = `Erro ao atualizar adotante (${res.status})`
+        try {
+            const errorData = await res.json()
+            errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+            const text = await res.text()
+            errorMessage = text || errorMessage
+        }
+        throw new Error(errorMessage)
+    }
+    return res.json()
+}
+
 export async function getAdotanteCompatibility(adotanteId: number) {
     const res = await fetch(`${API_BASE}/compatibilidade/adotante/${adotanteId}/pets`)
     if (!res.ok) {
@@ -466,10 +509,18 @@ export async function createAdoptionRequest(
         }),
     })
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(
-            `Failed to create adoption request: ${res.status} ${text}`,
-        )
+        let errorMessage = 'Failed to create adoption request'
+        try {
+            const errorData = await res.json()
+            if (errorData.error) {
+                errorMessage = errorData.error
+            }
+        } catch {
+            // Se não conseguir parsear JSON, usar texto
+            const text = await res.text()
+            errorMessage = text || errorMessage
+        }
+        throw new Error(errorMessage)
     }
     return res.json()
 }

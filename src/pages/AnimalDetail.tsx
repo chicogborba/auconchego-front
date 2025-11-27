@@ -116,16 +116,32 @@ export default function AnimalDetail() {
         return fmt(start)
     }
 
-    // 🔒 Regra de permissão para editar histórico
+    // 🔒 Regra de permissão para editar histórico e pet
+    // Se o pet está ADOTADO, apenas o adotante pode editar
+    // Se o pet NÃO está ADOTADO, tutor de origem e ONG podem editar
     const canEditHistory =
         !!pet &&
         !!currentUser &&
         (
-            // Tutor de origem
-            (currentUser.role === 'TUTOR' && pet.idTutorOrigem === currentUser.id) ||
-            // ONG responsável
+            // Se pet está ADOTADO, apenas o adotante pode editar
+            (pet.status === 'ADOTADO' && currentUser.role === 'ADOTANTE' && pet.adopterId === currentUser.id) ||
+            // Se pet NÃO está ADOTADO, tutor de origem e ONG podem editar
+            (pet.status !== 'ADOTADO' && (
+                (currentUser.role === 'TUTOR' && (pet.tutorId === currentUser.id || (pet as any).tutorOrigem?.id === currentUser.id)) ||
+                (currentUser.role === 'ONG' && pet.idOng === currentUser.id)
+            ))
+        )
+    
+    // Permissão para visualizar histórico (tutor de origem e adotante podem ver)
+    const canViewHistory =
+        !!pet &&
+        !!currentUser &&
+        (
+            // Tutor de origem sempre pode ver (verifica tutorId ou tutorOrigem)
+            (currentUser.role === 'TUTOR' && (pet.tutorId === currentUser.id || (pet as any).tutorOrigem?.id === currentUser.id)) ||
+            // ONG responsável pode ver
             (currentUser.role === 'ONG' && pet.idOng === currentUser.id) ||
-            // Adotante atual (idTutorAdotante mapeado como adopterId)
+            // Adotante atual pode ver
             (currentUser.role === 'ADOTANTE' && pet.adopterId === currentUser.id)
         )
 
@@ -137,7 +153,9 @@ export default function AnimalDetail() {
             setAlertModal({
                 isOpen: true,
                 title: 'Permissão negada',
-                message: 'Apenas o tutor, a ONG responsável ou o adotante deste pet podem registrar novas ações.',
+                message: pet.status === 'ADOTADO' 
+                    ? 'Apenas o adotante deste pet pode registrar novas ações no histórico.'
+                    : 'Apenas o tutor ou a ONG responsável podem registrar novas ações.',
                 type: 'warning',
             })
             return
@@ -179,6 +197,19 @@ export default function AnimalDetail() {
     const handleAdopt = () => {
         ;(async () => {
             try {
+                // Verificar se o pet está disponível
+                if (pet.status === 'RESERVADO' || pet.status === 'ADOTADO') {
+                    setAlertModal({
+                        isOpen: true,
+                        title: 'Pet não disponível',
+                        message: pet.status === 'RESERVADO' 
+                            ? 'Este pet já possui uma solicitação de adoção em análise.'
+                            : 'Este pet já foi adotado.',
+                        type: 'warning',
+                    })
+                    return
+                }
+
                 const rawUser = localStorage.getItem('currentUser')
                 if (!rawUser) {
                     setAlertModal({
@@ -201,12 +232,34 @@ export default function AnimalDetail() {
                     console.error('Erro ao ler currentUser do localStorage', e)
                 }
 
+                // Tentar obter do localStorage também (fallback)
+                if (!adotanteId) {
+                    const adotanteIdStr = localStorage.getItem('adotanteId')
+                    if (adotanteIdStr) {
+                        const parsedId = Number(adotanteIdStr)
+                        if (!isNaN(parsedId)) {
+                            adotanteId = parsedId
+                        }
+                    }
+                }
+
                 if (!adotanteId) {
                     setAlertModal({
                         isOpen: true,
                         title: 'Acesso Restrito',
-                        message: 'Somente adotantes podem solicitar adoção.',
+                        message: 'Somente adotantes podem solicitar adoção. Por favor, faça login novamente.',
                         type: 'warning',
+                    })
+                    return
+                }
+
+                // Validar que o ID é um número válido
+                if (isNaN(adotanteId) || adotanteId <= 0) {
+                    setAlertModal({
+                        isOpen: true,
+                        title: 'Erro',
+                        message: 'ID de adotante inválido. Por favor, faça login novamente.',
+                        type: 'error',
                     })
                     return
                 }
@@ -218,14 +271,53 @@ export default function AnimalDetail() {
                     title: 'Pedido enviado!',
                     message: `Pedido de adoção para ${pet.name} enviado! Agora o tutor/ONG precisa aprovar.`,
                     type: 'success',
-                    onConfirm: () => navigate('/main'),
+                    onConfirm: () => {
+                        // Recarregar a página para atualizar o status do pet
+                        window.location.reload()
+                    },
                 })
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Erro ao solicitar adoção', err)
+                
+                // Extrair mensagem de erro mais específica
+                let errorMessage = 'Não foi possível enviar o pedido. Tente novamente.'
+                
+                if (err?.message) {
+                    const errMsg = err.message.toLowerCase()
+                    if (errMsg.includes('adotante não encontrado') || errMsg.includes('adotante not found')) {
+                        errorMessage = 'Adotante não encontrado. Por favor, faça login novamente.'
+                    } else if (errMsg.includes('not available') || errMsg.includes('não disponível')) {
+                        errorMessage = 'Este pet não está disponível para adoção no momento.'
+                    } else if (errMsg.includes('already a pending') || errMsg.includes('já existe')) {
+                        errorMessage = 'Já existe uma solicitação de adoção pendente para este pet.'
+                    } else if (errMsg.includes('pet não encontrado') || errMsg.includes('pet not found')) {
+                        errorMessage = 'Pet não encontrado. Por favor, recarregue a página.'
+                    } else if (errMsg.includes('foreign key constraint') || errMsg.includes('constraint')) {
+                        errorMessage = 'Erro ao processar solicitação. Por favor, faça login novamente e tente outra vez.'
+                    } else {
+                        // Tentar extrair mensagem do backend diretamente
+                        errorMessage = err.message
+                        // Se a mensagem contém JSON, tentar extrair
+                        try {
+                            if (err.message.includes('{')) {
+                                const jsonMatch = err.message.match(/\{.*\}/)
+                                if (jsonMatch) {
+                                    const errorObj = JSON.parse(jsonMatch[0])
+                                    if (errorObj.error) {
+                                        errorMessage = errorObj.error
+                                    }
+                                }
+                            }
+                        } catch {
+                            // Se não conseguir parsear, usar a mensagem original
+                        }
+                    }
+                }
+
                 setAlertModal({
                     isOpen: true,
                     title: 'Erro',
-                    message: 'Não foi possível enviar o pedido. Tente novamente.',
+                    message: errorMessage,
                     type: 'error',
                 })
             }
@@ -247,90 +339,204 @@ export default function AnimalDetail() {
         <div className="min-h-screen bg-[#FFF1BA]">
             <TopBar />
 
-            <div className="max-w-7xl mx-auto px-4 py-12">
-                <div className="grid lg:grid-cols-5 gap-8">
+            <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+                <div className="grid lg:grid-cols-12 gap-5 lg:gap-6">
                     {/* Coluna da Imagem Principal + Thumbnails */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <Card className="bg-white border-4 border-[#FFBD59] shadow-xl">
-                            <CardContent className="p-4">
-                                <div className="relative rounded-3xl overflow-hidden border-4 border-[#FFBD59] shadow-xl">
+                    <div className="lg:col-span-5">
+                        <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg overflow-hidden">
+                            <CardContent className="p-0">
+                                <div className="relative rounded-t-2xl overflow-hidden">
                                     <img
                                         src={pet.images[selectedImage]}
                                         alt={pet.name}
-                                        className="w-full h-[420px] object-cover"
+                                        className="w-full h-[450px] md:h-[500px] object-cover"
                                     />
                                     <button
                                         onClick={() => setSelectedImage((selectedImage + 1) % pet.images.length)}
-                                        className="absolute bottom-4 right-4 bg-[#FFBD59] text-[#5C4A1F] px-4 py-2 rounded-full font-bold shadow-lg hover:bg-[#FFC977] transition-colors"
+                                        className="absolute bottom-3 right-3 bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] px-4 py-2 rounded-lg font-semibold shadow-md border-2 border-[#5C4A1F] transition-all text-sm"
                                     >
                                         Ver outra foto
                                     </button>
-                                    <div className="absolute top-4 left-4 bg-white/80 px-4 py-2 rounded-full flex items-center gap-2 shadow-md">
-                                        <Heart className="w-5 h-5 text-[#FF4B6E]" />
-                                        <span className="font-semibold text-[#5C4A1F]">
-                      Pronto para encontrar uma nova família
-                    </span>
-                                    </div>
                                 </div>
 
                                 {/* Thumbnails */}
-                                <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-                                    {pet.images.map((img: string, index: number) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => setSelectedImage(index)}
-                                            className={`flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden border-4 ${
-                                                selectedImage === index
-                                                    ? 'border-[#FF4B6E]'
-                                                    : 'border-transparent opacity-70 hover:opacity-100'
-                                            } transition-all`}
-                                        >
-                                            <img
-                                                src={img}
-                                                alt={`${pet.name} ${index + 1}`}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </button>
-                                    ))}
-                                </div>
+                                {pet.images.length > 1 && (
+                                    <div className="p-3 bg-[#F5E6C3]">
+                                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                                            {pet.images.map((img: string, index: number) => (
+                                                <button
+                                                    key={index}
+                                                    onClick={() => setSelectedImage(index)}
+                                                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                                                        selectedImage === index
+                                                            ? 'border-[#5C4A1F] shadow-md'
+                                                            : 'border-[#5C4A1F]/20 opacity-70 hover:opacity-100 hover:border-[#5C4A1F]/40'
+                                                    }`}
+                                                >
+                                                    <img
+                                                        src={img}
+                                                        alt={`${pet.name} ${index + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
+                    </div>
 
-                        {/* Info rápida (idade, porte, peso, etc) */}
-                        <Card className="bg-white border-4 border-[#FFBD59] shadow-xl">
-                            <CardContent className="p-6">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <Calendar className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Idade</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">{pet.age}</p>
+                    {/* Coluna de Informações */}
+                    <div className="lg:col-span-7 space-y-4">
+                        {/* Nome e Ação */}
+                        <div className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 rounded-2xl shadow-lg p-5 md:p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                {pet.type === 'cat' ? (
+                                    <Cat className="w-8 h-8 md:w-10 md:h-10 text-[#5C4A1F] flex-shrink-0" />
+                                ) : (
+                                    <Dog className="w-8 h-8 md:w-10 md:h-10 text-[#5C4A1F] flex-shrink-0" />
+                                )}
+                                <div className="flex-1">
+                                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#5C4A1F] tracking-tight">
+                                        {pet.name}
+                                    </h1>
+                                </div>
+                            </div>
+
+                            {/* Botão de Adoção */}
+                            {pet.status !== 'ADOTADO' && pet.status !== 'RESERVADO' && (
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-3 border-t border-[#5C4A1F]/20">
+                                    <Button
+                                        onClick={handleAdopt}
+                                        className="bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] font-bold text-sm md:text-base px-5 md:px-6 py-2.5 rounded-lg border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
+                                    >
+                                        <Heart className="w-4 h-4" />
+                                        Quero adotar
+                                    </Button>
+                                    <span className="text-xs text-[#8B6914] text-center sm:text-left">
+                                        O tutor/ONG será notificado.
+                                    </span>
+                                </div>
+                            )}
+                            {pet.status === 'RESERVADO' && (
+                                <div className="pt-3 border-t border-[#5C4A1F]/20">
+                                    <div className="px-4 py-3 bg-[#FFF1BA] border-2 border-[#5C4A1F]/40 rounded-lg">
+                                        <p className="text-[#5C4A1F] font-semibold text-sm">
+                                            Este pet está em análise para adoção
+                                        </p>
                                     </div>
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <Ruler className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Porte</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">{pet.size}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Descrição e Saúde em Grid */}
+                        <div className="grid md:grid-cols-2 gap-4 items-stretch">
+                            {/* Descrição */}
+                            <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg h-full flex flex-col">
+                                <CardContent className="p-4 md:p-5 flex flex-col flex-grow">
+                                    <h3 className="text-lg md:text-xl font-bold text-[#5C4A1F] mb-3">Sobre o pet</h3>
+                                    <p className="text-[#5C4A1F] leading-relaxed mb-3 text-sm">{pet.description || 'Sem descrição disponível.'}</p>
+                                    
+                                    {/* Tags e Temperamento */}
+                                    {(pet.tags?.length > 0 || pet.temperament?.length > 0) && (
+                                        <div className="flex flex-wrap gap-1.5 mt-3">
+                                            {pet.tags
+                                                ?.filter((tag: string) => tag && tag.trim().length > 0)
+                                                .map((tag: string, index: number) => {
+                                                    const trimmedTag = tag.trim()
+                                                    return (
+                                                        <span
+                                                            key={`tag-${index}`}
+                                                            className="px-2 py-0.5 bg-[#FFF1BA] border border-[#5C4A1F] rounded-full text-xs font-medium text-[#5C4A1F] whitespace-nowrap"
+                                                        >
+                                                            {trimmedTag}
+                                                        </span>
+                                                    )
+                                                })}
+                                            {pet.temperament
+                                                ?.filter((temp: string) => temp && temp.trim().length > 0)
+                                                .map((temp: string, index: number) => {
+                                                    const trimmedTemp = temp.trim()
+                                                    return (
+                                                        <span
+                                                            key={`temp-${index}`}
+                                                            className="px-2 py-0.5 bg-[#FCE4EC] border border-[#5C4A1F]/40 rounded-full text-xs font-medium text-[#5C4A1F] whitespace-nowrap"
+                                                        >
+                                                            {trimmedTemp}
+                                                        </span>
+                                                    )
+                                                })}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* Status de Saúde */}
+                            <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg h-full flex flex-col">
+                                <CardContent className="p-4 md:p-5 flex flex-col flex-grow">
+                                    <h3 className="text-lg md:text-xl font-bold text-[#5C4A1F] mb-3">Saúde</h3>
+                                    <p className="text-[#5C4A1F] mb-3 leading-relaxed text-sm">
+                                        {pet.healthStatus || 'Informações de saúde não detalhadas.'}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {pet.vaccinated && (
+                                            <div className="px-3 py-1.5 bg-[#EAF7E9] border border-[#5C4A1F]/20 rounded-lg">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Syringe className="w-3.5 h-3.5 text-[#5C4A1F]" />
+                                                    <span className="font-semibold text-[#5C4A1F] text-xs">Vacinado</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {pet.castrated && (
+                                            <div className="px-3 py-1.5 bg-[#E3F2FD] border border-[#5C4A1F]/20 rounded-lg">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Scissors className="w-3.5 h-3.5 text-[#5C4A1F]" />
+                                                    <span className="font-semibold text-[#5C4A1F] text-xs">Castrado</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <Weight className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Peso</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">{pet.weight}</p>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Informações Rápidas - Horizontal, abaixo dos cards acima */}
+                        <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg w-full">
+                            <CardContent className="p-4">
+                                <h3 className="text-base font-bold text-[#5C4A1F] mb-3 text-center">Informações Rápidas</h3>
+                                <div className="flex gap-2 justify-between overflow-x-auto scrollbar-hide">
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <Calendar className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Idade</p>
+                                        <p className="font-bold text-[#5C4A1F] text-xs">{pet.age || '—'}</p>
                                     </div>
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <MapPin className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Local</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">{pet.location}</p>
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <Ruler className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Porte</p>
+                                        <p className="font-bold text-[#5C4A1F] text-xs">{pet.size || '—'}</p>
                                     </div>
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <Syringe className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Vacinas</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <Weight className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Peso</p>
+                                        <p className="font-bold text-[#5C4A1F] text-xs">{pet.weight ? `${pet.weight} kg` : '—'}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <MapPin className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Local</p>
+                                        <p className="font-bold text-[#5C4A1F] text-[10px] text-center leading-tight truncate w-full">{pet.location || '—'}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <Syringe className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Vacinas</p>
+                                        <p className="font-bold text-[#5C4A1F] text-[10px]">
                                             {pet.vaccinated ? 'Em dia' : 'Não'}
                                         </p>
                                     </div>
-                                    <div className="flex flex-col items-center p-4 bg-[#FFF1BA] rounded-2xl border-2 border-[#FFBD59]">
-                                        <Scissors className="w-8 h-8 text-[#FFBD59] mb-2" />
-                                        <p className="text-sm text-[#8B6914] mb-1">Castrado</p>
-                                        <p className="font-bold text-[#5C4A1F] text-lg">
+                                    <div className="flex flex-col items-center p-2.5 bg-[#FFF1BA] rounded-xl border-2 border-[#5C4A1F]/20 hover:shadow-md transition-shadow flex-1 min-w-0">
+                                        <Scissors className="w-4 h-4 text-[#5C4A1F] mb-1" />
+                                        <p className="text-[9px] text-[#8B6914] mb-0.5 font-medium text-center">Castrado</p>
+                                        <p className="font-bold text-[#5C4A1F] text-[10px]">
                                             {pet.castrated ? 'Sim' : 'Não'}
                                         </p>
                                     </div>
@@ -338,93 +544,15 @@ export default function AnimalDetail() {
                             </CardContent>
                         </Card>
                     </div>
-
-                    {/* Coluna de Informações */}
-                    <div className="lg:col-span-3 space-y-6">
-                        {/* Nome e Ação */}
-                        <div>
-                            <div className="flex items-center gap-4 mb-6">
-                                {pet.type === 'cat' ? (
-                                    <Cat className="w-10 h-10 text-[#FF4B6E]" />
-                                ) : (
-                                    <Dog className="w-10 h-10 text-[#FF4B6E]" />
-                                )}
-                                <div>
-                                    <h1 className="text-5xl font-extrabold text-[#5C4A1F] tracking-tight">
-                                        {pet.name}
-                                    </h1>
-                                    <p className="text-lg text-[#8B6914]">
-                                        Um amigo especial esperando por um novo lar 💛
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Botão de Adoção */}
-                            <div className="flex flex-wrap items-center gap-4 mb-6">
-                                <Button
-                                    onClick={handleAdopt}
-                                    className="bg-[#FF4B6E] hover:bg-[#FF6B85] text-white font-bold text-lg px-8 py-3 rounded-2xl shadow-lg transition-all flex items-center gap-2"
-                                >
-                                    <Heart className="w-5 h-5" />
-                                    Quero adotar
-                                </Button>
-                                <span className="text-sm text-[#8B6914]">
-                  Ao solicitar adoção, o tutor/ONG será notificado.
-                </span>
-                            </div>
-                        </div>
-
-                        {/* Descrição */}
-                        <Card className="bg-white border-4 border-[#FFBD59] shadow-xl">
-                            <CardContent className="p-8">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Sparkles className="w-6 h-6 text-[#FFBD59]" />
-                                    <h3 className="text-3xl font-bold text-[#5C4A1F]">Sobre o pet</h3>
-                                </div>
-                                <p className="text-[#5C4A1F] text-lg leading-relaxed">{pet.description}</p>
-                            </CardContent>
-                        </Card>
-
-                        {/* Status de Saúde */}
-                        <Card className="bg-white border-4 border-[#FFBD59] shadow-xl">
-                            <CardContent className="p-8">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Syringe className="w-6 h-6 text-[#FFBD59]" />
-                                    <h3 className="text-3xl font-bold text-[#5C4A1F]">Saúde</h3>
-                                </div>
-                                <p className="text-[#5C4A1F] text-lg mb-6 leading-relaxed">
-                                    {pet.healthStatus || 'Informações de saúde não detalhadas.'}
-                                </p>
-                                <div className="flex flex-wrap gap-4">
-                                    {pet.vaccinated && (
-                                        <div className="flex-1 min-w-[160px] px-5 py-4 bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-600 rounded-2xl shadow-lg">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Syringe className="w-6 h-6 text-green-700" />
-                                                <span className="font-bold text-green-700 text-lg">Vacinado</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {pet.castrated && (
-                                        <div className="flex-1 min-w-[160px] px-5 py-4 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-600 rounded-2xl shadow-lg">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Scissors className="w-6 h-6 text-blue-700" />
-                                                <span className="font-bold text-blue-700 text-lg">Castrado</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
                 </div>
 
                 {/* Histórico de ações do pet */}
-                <div className="mt-12">
-                    <Card className="bg-white border-4 border-purple-500 shadow-xl">
-                        <CardContent className="p-8">
+                <div className="mt-8 lg:mt-10">
+                    <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg">
+                        <CardContent className="p-5 md:p-6">
                             <div className="flex items-center gap-2 mb-4">
-                                <Sparkles className="w-6 h-6 text-purple-500" />
-                                <h2 className="text-3xl font-bold text-[#5C4A1F]">Histórico do pet</h2>
+                                <Sparkles className="w-5 h-5 text-[#5C4A1F]" />
+                                <h2 className="text-2xl font-bold text-[#5C4A1F]">Histórico do pet</h2>
                             </div>
 
                             {loadingHistory ? (
@@ -437,8 +565,8 @@ export default function AnimalDetail() {
                                 <div className="mt-6">
                                     {/* container da timeline horizontal */}
                                     <div className="relative w-full h-28">
-                                        {/* linha roxa horizontal */}
-                                        <div className="absolute left-4 right-4 top-1/2 h-1 bg-purple-400 rounded-full" />
+                                        {/* linha horizontal */}
+                                        <div className="absolute left-4 right-4 top-1/2 h-1 bg-[#5C4A1F]/30 rounded-full" />
 
                                         {locationHistory
                                             .slice()
@@ -461,13 +589,13 @@ export default function AnimalDetail() {
                                                             transform: 'translate(-50%, -50%)',
                                                         }}
                                                     >
-                                                        {/* bolinha roxa */}
-                                                        <div className="w-4 h-4 rounded-full bg-purple-500 border-2 border-white shadow-md group-hover:scale-110 transition-transform" />
+                                                        {/* bolinha */}
+                                                        <div className="w-4 h-4 rounded-full bg-[#5C4A1F] border-2 border-[#F5E6C3] shadow-md group-hover:scale-110 transition-transform" />
 
                                                         {/* tooltip flutuante acima da bolinha */}
-                                                        <div className="absolute left-1/2 -translate-x-1/2 -top-3 md:-top-24 z-10 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transform translate-y-2 group-hover:translate-y-0 bg-white/95 border border-purple-200 rounded-xl px-4 py-3 shadow-xl w-[260px]">
+                                                        <div className="absolute left-1/2 -translate-x-1/2 -top-3 md:-top-24 z-10 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transform translate-y-2 group-hover:translate-y-0 bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 rounded-xl px-4 py-3 shadow-lg w-[260px]">
                                                             <div className="flex items-center justify-between gap-4">
-                                <span className="font-semibold text-purple-700 truncate">
+                                <span className="font-semibold text-[#5C4A1F] truncate">
                                   {(item as any).local || (item as any).tipo}
                                 </span>
                                                                 <span className="text-xs text-[#8B6914]">
@@ -491,7 +619,7 @@ export default function AnimalDetail() {
                             )}
 
                             {/* Formulário para adicionar ação manual / mensagem de permissão */}
-                            <div className="mt-8 border-t border-[#F5E6C3] pt-4">
+                            <div className="mt-6 border-t border-[#5C4A1F]/20 pt-4">
                                 {canEditHistory ? (
                                     <>
                                         <p className="text-sm text-[#8B6914] mb-3">
@@ -506,27 +634,33 @@ export default function AnimalDetail() {
                                                 value={newActionName}
                                                 onChange={e => setNewActionName(e.target.value)}
                                                 placeholder="Nome da ação (ex: Resgate, Lar temporário, Adoção)"
-                                                className="flex-1 rounded-xl border-2 border-[#FFBD59] bg-[#FFF9E6] px-4 py-2 text-sm text-[#5C4A1F] focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                                className="flex-1 rounded-xl border-2 border-[#5C4A1F] bg-[#FFF1BA] px-4 py-2 text-sm text-[#5C4A1F] focus:outline-none focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563]"
                                             />
                                             <input
                                                 type="text"
                                                 value={newActionDescription}
                                                 onChange={e => setNewActionDescription(e.target.value)}
                                                 placeholder="Descrição (ex: Nome do adotante, observações...)"
-                                                className="flex-1 rounded-xl border-2 border-[#FFBD59] bg-[#FFF9E6] px-4 py-2 text-sm text-[#5C4A1F] focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                                className="flex-1 rounded-xl border-2 border-[#5C4A1F] bg-[#FFF1BA] px-4 py-2 text-sm text-[#5C4A1F] focus:outline-none focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563]"
                                             />
                                             <Button
                                                 type="submit"
                                                 disabled={savingHistory}
-                                                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-semibold shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                                                className="bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] px-6 py-2 rounded-xl font-bold border-2 border-[#5C4A1F] shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                                             >
                                                 {savingHistory ? 'Salvando...' : 'Adicionar ação'}
                                             </Button>
                                         </form>
                                     </>
+                                ) : canViewHistory ? (
+                                    <p className="text-sm text-[#8B6914]">
+                                        {pet.status === 'ADOTADO' 
+                                            ? 'Você pode visualizar o histórico, mas apenas o adotante pode adicionar novas ações.'
+                                            : 'Você pode visualizar o histórico, mas apenas o tutor ou a ONG responsável podem adicionar novas ações.'}
+                                    </p>
                                 ) : (
                                     <p className="text-sm text-[#8B6914]">
-                                        Apenas o tutor, a ONG responsável ou o adotante deste pet podem registrar novas ações.
+                                        Você não tem permissão para visualizar ou editar o histórico deste pet.
                                     </p>
                                 )}
                             </div>
@@ -535,23 +669,35 @@ export default function AnimalDetail() {
                 </div>
 
                 {/* Mapa de Localização - Largura Total */}
-                <div className="mt-12">
-                    <Card className="bg-white border-4 border-[#FFBD59] shadow-xl">
-                        <CardContent className="p-8">
-                            <div className="mb-6">
+                <div className="mt-8 lg:mt-10">
+                    <Card className="bg-[#F5E6C3] border-2 border-[#5C4A1F]/20 shadow-lg">
+                        <CardContent className="p-5 md:p-6">
+                            <div className="mb-4">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <MapPin className="w-7 h-7 text-[#FFBD59]" />
-                                    <h2 className="text-4xl font-bold text-[#5C4A1F]">Localização</h2>
+                                    <MapPin className="w-5 h-5 text-[#5C4A1F]" />
+                                    <h2 className="text-2xl font-bold text-[#5C4A1F]">Localização</h2>
                                 </div>
-                                <p className="text-[#5C4A1F] text-lg ml-9">📍 {pet.address}</p>
+                                <p className="text-[#5C4A1F] ml-7">📍 {pet.address || pet.location || 'Localização não informada'}</p>
                             </div>
-                            <div className="w-full h-[450px] rounded-2xl overflow-hidden border-4 border-[#FFBD59] shadow-xl">
-                                <LocationMap
-                                    lat={pet.coordinates.lat}
-                                    lng={pet.coordinates.lng}
-                                    petName={pet.name}
-                                    location={pet.location}
-                                />
+                            <div className="w-full h-[450px] rounded-xl overflow-hidden border-2 border-[#5C4A1F]/20 shadow-md relative">
+                                {pet.coordinates && pet.coordinates.lat && pet.coordinates.lng ? (
+                                    <LocationMap
+                                        lat={pet.coordinates.lat}
+                                        lng={pet.coordinates.lng}
+                                        petName={pet.name}
+                                        location={pet.location}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-[#F5E6C3]">
+                                        <div className="text-center">
+                                            <MapPin className="w-16 h-16 text-[#5C4A1F]/40 mx-auto mb-4" />
+                                            <p className="text-[#5C4A1F] font-semibold">Mapa não disponível</p>
+                                            <p className="text-[#8B6914] text-sm mt-2">
+                                                Coordenadas não informadas para este pet
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

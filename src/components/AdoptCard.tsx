@@ -24,6 +24,7 @@ interface AdoptCardProps {
     status?: string
     onAdopt?: () => void
     onDetails?: () => void
+    hideAdoptButton?: boolean // Esconder botão "Quero adotar" quando o pet já foi adotado
 }
 
 export default function AdoptCard({
@@ -45,6 +46,7 @@ export default function AdoptCard({
                                       onAdopt,
                                       onDetails,
                                       status,
+                                      hideAdoptButton = false,
                                   }: AdoptCardProps) {
     const navigate = useNavigate()
 
@@ -224,20 +226,22 @@ export default function AdoptCard({
 
                 {/* Botões - sempre no final */}
                 <div className="flex flex-col gap-3 mt-auto">
-                    {isAdotante ? (
-                        <Button
-                            onClick={handleAdopt}
-                            className="w-full h-12 bg-[#FFBD59] hover:bg-[#FFBD59]/90 text-[#5C4A1F] font-bold rounded-xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all"
-                        >
-                            Quero adotar
-                        </Button>
-                    ) : (
-                        <div className="w-full h-12 flex items-center justify-center rounded-xl border-2 border-[#5C4A1F]/40 bg-[#FFF1BA] text-[#5C4A1F] text-sm font-semibold">
-                            Status: {formatPetStatus(status)}
-                        </div>
+                    {!hideAdoptButton && (
+                        <>
+                            {isAdotante && status !== 'RESERVADO' && status !== 'ADOTADO' ? (
+                                <Button
+                                    onClick={handleAdopt}
+                                    className="w-full h-12 bg-[#FFBD59] hover:bg-[#FFBD59]/90 text-[#5C4A1F] font-bold rounded-xl border-2 border-[#5C4A1F] shadow-md hover:shadow-lg transition-all"
+                                >
+                                    Quero adotar
+                                </Button>
+                            ) : (
+                                <div className="w-full h-12 flex items-center justify-center rounded-xl border-2 border-[#5C4A1F]/40 bg-[#FFF1BA] text-[#5C4A1F] text-sm font-semibold">
+                                    {status === 'RESERVADO' ? 'Em análise' : status === 'ADOTADO' ? 'Adotado' : `Status: ${formatPetStatus(status)}`}
+                                </div>
+                            )}
+                        </>
                     )}
-
-
 
                     <Button
                         onClick={handleDetails}

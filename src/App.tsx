@@ -12,6 +12,7 @@ import PetsAdmin from './pages/PetsAdmin'
 import OngsAdmin from './pages/OngsAdmin'
 import TutorsAdmin from './pages/TutorsAdmin'
 import MyAdoptions from './pages/MyAdoptions'
+import Preferencias from './pages/Preferencias'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="/animal/:id" element={<AnimalDetail />} />
           <Route path="/pets" element={<List />} />
           <Route path="/meus-adotados" element={<MyAdoptions />} />
+          <Route path="/preferencias" element={<Preferencias />} />
           <Route path="/pets/admin" element={<PetsAdmin />} />
           <Route path="/ongs/admin" element={<OngsAdmin />} />
           <Route path="/tutores/admin" element={<TutorsAdmin />} />

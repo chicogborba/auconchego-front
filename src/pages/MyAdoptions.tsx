@@ -51,6 +51,8 @@ export default function MyAdoptions() {
                 image={(p.imagens && p.imagens[0]) || '/assets/icon.png'}
                 tags={[p.porte, p.sexo].filter(Boolean)}
                 compatibility={undefined}
+                hideAdoptButton={true}
+                status="ADOTADO"
               />
             ))}
           </div>
