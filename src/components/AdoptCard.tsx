@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Cat, Dog } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import AlertModal from '@/components/AlertModal'
 
 interface AdoptCardProps {
     id: number
@@ -19,6 +21,7 @@ interface AdoptCardProps {
     castrated?: boolean
     temperament?: string[]
     healthStatus?: string
+    status?: string
     onAdopt?: () => void
     onDetails?: () => void
 }
@@ -78,14 +81,16 @@ export default function AdoptCard({
     const isTutor = userRole === 'TUTOR'
 
 
+    const [showAlert, setShowAlert] = useState(false)
+
     const handleAdopt = () => {
         // Só deixa clicar se for ADOTANTE
         if (!isAdotante) {
-            alert('Somente adotantes podem solicitar adoção.')
+            setShowAlert(true)
             return
         }
 
-        if (onAdot) return onAdopt()
+        if (onAdopt) return onAdopt()
         navigate(`/animal/${id}`)
     }
 
@@ -96,9 +101,9 @@ export default function AdoptCard({
     }
 
     return (
-        <div className="bg-[#F5E6C3] rounded-3xl overflow-hidden shadow-lg max-w-md w-full border-2 border-[#5C4A1F]/20">
+        <div className="bg-[#F5E6C3] rounded-3xl overflow-hidden shadow-lg max-w-md w-full border-2 border-[#5C4A1F]/20 flex flex-col h-full">
             {/* Imagem do Pet com Badge do Tipo */}
-            <div className="relative h-64">
+            <div className="relative h-64 flex-shrink-0">
                 <img
                     src={image}
                     alt={name}
@@ -121,7 +126,7 @@ export default function AdoptCard({
             </div>
 
             {/* Conteúdo do Card */}
-            <div className="p-6">
+            <div className="p-6 flex flex-col flex-grow">
                 {/* Compatibilidade (se disponível) */}
                 {typeof compatibility !== 'undefined' && (
                     <div className="mb-3 flex items-center gap-2">
@@ -187,28 +192,38 @@ export default function AdoptCard({
                 </p>
 
                 {/* Tags + temperamento */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                    {tags.map((tag, index) => (
-                        <span
-                            key={`tag-${index}`}
-                            className="px-4 py-1 bg-[#FFF1BA] border-2 border-[#5C4A1F] rounded-full text-sm font-medium text-[#5C4A1F]"
-                        >
-              {tag}
-            </span>
-                    ))}
+                <div className="flex flex-wrap gap-2 mb-6 flex-grow">
+                    {tags
+                        .filter(tag => tag && tag.trim().length > 0)
+                        .map((tag, index) => {
+                            const trimmedTag = tag.trim()
+                            return (
+                                <span
+                                    key={`tag-${index}`}
+                                    className="px-3 py-1 bg-[#FFF1BA] border-2 border-[#5C4A1F] rounded-full text-sm font-medium text-[#5C4A1F] whitespace-nowrap"
+                                >
+                                    {trimmedTag}
+                                </span>
+                            )
+                        })}
 
-                    {temperament && temperament.length > 0 && temperament.map((temp, index) => (
-                        <span
-                            key={`temp-${index}`}
-                            className="px-3 py-1 bg-[#FCE4EC] border-2 border-[#5C4A1F]/40 rounded-full text-xs font-medium text-[#5C4A1F]"
-                        >
-              {temp}
-            </span>
-                    ))}
+                    {temperament && temperament.length > 0 && temperament
+                        .filter(temp => temp && temp.trim().length > 0)
+                        .map((temp, index) => {
+                            const trimmedTemp = temp.trim()
+                            return (
+                                <span
+                                    key={`temp-${index}`}
+                                    className="px-2 py-1 bg-[#FCE4EC] border-2 border-[#5C4A1F]/40 rounded-full text-xs font-medium text-[#5C4A1F] whitespace-nowrap"
+                                >
+                                    {trimmedTemp}
+                                </span>
+                            )
+                        })}
                 </div>
 
-                {/* Botões */}
-                <div className="flex flex-col gap-3">
+                {/* Botões - sempre no final */}
+                <div className="flex flex-col gap-3 mt-auto">
                     {isAdotante ? (
                         <Button
                             onClick={handleAdopt}
@@ -233,6 +248,15 @@ export default function AdoptCard({
                     </Button>
                 </div>
             </div>
+
+            {/* Alert Modal */}
+            <AlertModal
+                isOpen={showAlert}
+                onClose={() => setShowAlert(false)}
+                title="Acesso Restrito"
+                message="Somente adotantes podem solicitar adoção."
+                type="warning"
+            />
         </div>
     )
 }

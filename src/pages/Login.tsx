@@ -4,8 +4,12 @@ import TutorFormModal from '@/components/TutorFormModal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import TopBar from '@/components/TopBar'
+import { maskPhone, unmaskPhone, maskCEP, unmaskCEP } from '@/lib/masks'
+import AlertModal from '@/components/AlertModal'
+import { useAlert } from '@/hooks/useAlert'
 
 export default function Login() {
+  const { alert, showAlert, closeAlert } = useAlert()
   
     // Estados para Login
     const [loginUsername, setLoginUsername] = useState('')
@@ -23,14 +27,21 @@ export default function Login() {
   const [registerCidade, setRegisterCidade] = useState('')
   const [registerEstado, setRegisterEstado] = useState('')
   const [registerCEP, setRegisterCEP] = useState('')
+  const [registerEspecieDesejada, setRegisterEspecieDesejada] = useState('')
   const [tutorModalOpen, setTutorModalOpen] = useState(false)
   const [tutorPreset, setTutorPreset] = useState<any | null>(null)
+  
+  // Campos de compatibilidade
+  const [registerTemOutrosAnimais, setRegisterTemOutrosAnimais] = useState('')
+  const [registerTipoMoradia, setRegisterTipoMoradia] = useState('')
+  const [registerTempoCasa, setRegisterTempoCasa] = useState('')
+  const [registerExperiencia, setRegisterExperiencia] = useState('')
 
     const handleLogin = (e: FormEvent) => {
         e.preventDefault()
 
         if (!loginUsername) {
-            alert('Informe o seu email para login')
+            showAlert('Campo Obrigatório', 'Informe o seu email para login', 'warning')
             return
         }
 
@@ -45,7 +56,7 @@ export default function Login() {
                     )
 
                     if (!found) {
-                        alert('Adotante não encontrado. Faça cadastro primeiro.')
+                        showAlert('Adotante não encontrado', 'Faça cadastro primeiro.', 'warning')
                         return
                     }
 
@@ -60,7 +71,10 @@ export default function Login() {
                     localStorage.setItem('currentUser', JSON.stringify(currentUser))
                     localStorage.setItem('adotanteId', String(found.id))
 
-                    alert('Login realizado como adotante.')
+                    showAlert('Login realizado!', 'Login realizado como adotante.', 'success', () => {
+                        window.location.href = '/main'
+                    })
+                    return
                 }
 
                 // TUTOR
@@ -72,7 +86,7 @@ export default function Login() {
                     )
 
                     if (!found) {
-                        alert('Tutor não encontrado. Peça para uma ONG ou root te cadastrar.')
+                        showAlert('Tutor não encontrado', 'Peça para uma ONG ou root te cadastrar.', 'warning')
                         return
                     }
 
@@ -85,7 +99,10 @@ export default function Login() {
                     }
 
                     localStorage.setItem('currentUser', JSON.stringify(currentUser))
-                    alert('Login realizado como tutor.')
+                    showAlert('Login realizado!', 'Login realizado como tutor.', 'success', () => {
+                        window.location.href = '/main'
+                    })
+                    return
                 }
 
                 // ROOT (apenas front)
@@ -97,7 +114,7 @@ export default function Login() {
                         loginUsername.toLowerCase() !== ROOT_EMAIL.toLowerCase() ||
                         loginPassword !== ROOT_PASSWORD
                     ) {
-                        alert('Credenciais de administrador inválidas.')
+                        showAlert('Credenciais inválidas', 'Credenciais de administrador inválidas.', 'error')
                         return
                     }
 
@@ -109,14 +126,14 @@ export default function Login() {
                     }
 
                     localStorage.setItem('currentUser', JSON.stringify(currentUser))
-                    alert('Login realizado como administrador/root.')
+                    showAlert('Login realizado!', 'Login realizado como administrador/root.', 'success', () => {
+                        window.location.href = '/main'
+                    })
+                    return
                 }
-
-                // depois de qualquer login bem sucedido
-                window.location.href = '/main'
             } catch (err) {
                 console.error('Erro no login', err)
-                alert('Erro ao tentar efetuar login. Tente novamente.')
+                showAlert('Erro no login', 'Erro ao tentar efetuar login. Tente novamente.', 'error')
             }
         })()
     }
@@ -125,40 +142,71 @@ export default function Login() {
     const handleRegister = (e: FormEvent) => {
     e.preventDefault()
     // Simulação de cadastro
-    if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP) {
+    if (registerName && registerEmail && registerPassword && registerPhone && registerEndereco && registerCidade && registerEstado && registerCEP && registerEspecieDesejada) {
       ;(async () => {
         try {
           const nomeFull = `${registerName} ${registerLastName}`.trim()
-          const payload = {
+          // Remove campos undefined para evitar problemas no backend
+          const payload: any = {
             nome: nomeFull,
             email: registerEmail,
-            telefone: registerPhone,
+            telefone: unmaskPhone(registerPhone), // Remove máscara antes de enviar
             endereco: registerEndereco,
             cidade: registerCidade,
             estado: registerEstado,
-            cep: registerCEP,
-            // prefencias de compatibilidade podem ficar vazias por enquanto
-            especieDesejada: '',
+            cep: unmaskCEP(registerCEP), // Remove máscara antes de enviar
+            especieDesejada: registerEspecieDesejada,
             possuiDisponibilidade: true,
+            // Novos campos de compatibilidade - só inclui se tiver valor
+            temOutrosAnimais: registerTemOutrosAnimais === 'sim',
+          }
+          
+          // Adiciona campos opcionais apenas se tiverem valor
+          if (registerTipoMoradia) payload.tipoMoradia = registerTipoMoradia
+          if (registerTempoCasa) payload.tempoCasa = registerTempoCasa
+          if (registerExperiencia === 'sim' || registerExperiencia === 'nao') {
+            payload.experiencia = registerExperiencia === 'sim'
           }
           const created = await api.createAdotante(payload)
           // store adotante id locally for compatibility calculations
           if (created && created.id) {
             localStorage.setItem('adotanteId', String(created.id))
+            
+            // Login automático após registro
+            const currentUser = {
+              id: created.id,
+              role: 'ADOTANTE' as const,
+              nome: created.nome,
+              email: created.email,
+            }
+            localStorage.setItem('currentUser', JSON.stringify(currentUser))
+            
+            showAlert('Cadastro realizado!', 'Cadastro realizado com sucesso! Redirecionando...', 'success', () => {
+                window.location.href = '/main'
+            })
+          } else {
+            showAlert('Erro', 'Erro ao criar adotante. Tente novamente.', 'error')
           }
-          alert('Cadastro de adotante realizado com sucesso! Você será usado para calcular compatibilidade na listagem de pets.')
-        } catch (err) {
+        } catch (err: any) {
           console.error('Erro ao criar adotante', err)
-          alert('Erro ao criar adotante. Verifique os dados e tente novamente.')
+          // Tenta extrair a mensagem de erro do backend
+          let errorMessage = err?.message || 'Erro ao criar adotante. Verifique os dados e tente novamente.'
+          
+          // Verifica se é erro de email duplicado
+          if (errorMessage.includes('email') || errorMessage.includes('já está cadastrado') || errorMessage.includes('Unique constraint')) {
+            errorMessage = 'Este email já está cadastrado. Use outro email ou faça login na aba de login.'
+          }
+          
+          showAlert('Erro ao criar adotante', errorMessage, 'error')
         }
       })()
     } else {
-      alert('Preencha todos os campos obrigatórios de cadastro para criar um adotante.')
+      showAlert('Campos obrigatórios', 'Preencha todos os campos obrigatórios de cadastro para criar um adotante.', 'warning')
     }
   }
 
   const handleCreateTutorFromRegister = async () => {
-    // open modal prefilled
+    // open modal prefilled (telefone já está com máscara)
     setTutorPreset({ nome: registerName, email: registerEmail, telefone: registerPhone })
     setTutorModalOpen(true)
   }
@@ -204,10 +252,11 @@ export default function Login() {
               {/* Telefone */}
               <Input
                 type="tel"
-                placeholder="Telefone"
+                placeholder="(XX) XXXXX-XXXX"
                 value={registerPhone}
-                onChange={(e) => setRegisterPhone(e.target.value)}
+                onChange={(e) => setRegisterPhone(maskPhone(e.target.value))}
                 required
+                maxLength={15}
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
 
@@ -251,19 +300,21 @@ export default function Login() {
                 />
                 <Input
                   type="text"
-                  placeholder="Estado"
+                  placeholder="Estado (ex: RS)"
                   value={registerEstado}
-                  onChange={(e) => setRegisterEstado(e.target.value)}
+                  onChange={(e) => setRegisterEstado(e.target.value.toUpperCase().slice(0, 2))}
                   required
+                  maxLength={2}
                   className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
                 />
               </div>
               <Input
                 type="text"
-                placeholder="CEP"
+                placeholder="XXXXX-XXX"
                 value={registerCEP}
-                onChange={(e) => setRegisterCEP(e.target.value)}
+                onChange={(e) => setRegisterCEP(maskCEP(e.target.value))}
                 required
+                maxLength={9}
                 className="h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl placeholder:text-[#8B6914] text-center font-medium text-[#5C4A1F] focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
               />
 
@@ -274,10 +325,23 @@ export default function Login() {
                 </h3>
 
                 <div className="space-y-3">
+                  {/* Espécie Desejada - OBRIGATÓRIO */}
+                  <select
+                    value={registerEspecieDesejada}
+                    onChange={(e) => setRegisterEspecieDesejada(e.target.value)}
+                    required
+                    className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
+                  >
+                    <option value="" disabled>Espécie desejada *</option>
+                    <option value="Cachorro">Cachorro</option>
+                    <option value="Gato">Gato</option>
+                  </select>
+
                   {/* Possui outros animais */}
                   <select
+                    value={registerTemOutrosAnimais}
+                    onChange={(e) => setRegisterTemOutrosAnimais(e.target.value)}
                     className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>Você possui outros animais?</option>
                     <option value="sim">Sim</option>
@@ -286,8 +350,9 @@ export default function Login() {
 
                   {/* Tipo de moradia */}
                   <select
+                    value={registerTipoMoradia}
+                    onChange={(e) => setRegisterTipoMoradia(e.target.value)}
                     className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>Tipo de moradia</option>
                     <option value="apartamento">Apartamento</option>
@@ -297,8 +362,9 @@ export default function Login() {
 
                   {/* Tempo em casa */}
                   <select
+                    value={registerTempoCasa}
+                    onChange={(e) => setRegisterTempoCasa(e.target.value)}
                     className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>Tempo que passa em casa por dia</option>
                     <option value="baixo">Menos de 4h</option>
@@ -308,8 +374,9 @@ export default function Login() {
 
                   {/* Experiência */}
                   <select
+                    value={registerExperiencia}
+                    onChange={(e) => setRegisterExperiencia(e.target.value)}
                     className="w-full h-12 md:h-14 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-2xl text-[#8B6914] text-center font-medium focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] appearance-none transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>Já teve pets antes?</option>
                     <option value="sim">Sim</option>
@@ -408,7 +475,43 @@ export default function Login() {
           </div>
         </div>
       </div>
-      <TutorFormModal isOpen={tutorModalOpen} onClose={() => { setTutorModalOpen(false); setTutorPreset(null) }} tutor={tutorPreset} onSaved={() => { setTutorModalOpen(false); setTutorPreset(null); alert('Tutor criado com sucesso!') }} />
+      <TutorFormModal 
+        isOpen={tutorModalOpen} 
+        onClose={() => { setTutorModalOpen(false); setTutorPreset(null) }} 
+        tutor={tutorPreset} 
+        onSaved={async (tutor?: any) => { 
+          setTutorModalOpen(false)
+          setTutorPreset(null)
+          
+          if (tutor && tutor.id) {
+            // Login automático após registro de tutor
+            const currentUser = {
+              id: tutor.id,
+              role: 'TUTOR' as const,
+              nome: tutor.nome || tutorPreset?.nome || '',
+              email: tutor.email || tutorPreset?.email || '',
+              idOng: tutor.idOng || undefined,
+            }
+            localStorage.setItem('currentUser', JSON.stringify(currentUser))
+            
+            showAlert('Tutor criado!', 'Tutor criado com sucesso! Redirecionando...', 'success', () => {
+              window.location.href = '/main'
+            })
+          } else {
+            showAlert('Tutor criado!', 'Tutor criado com sucesso!', 'success')
+          }
+        }} 
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        onConfirm={alert.onConfirm}
+      />
     </div>
   )
 }

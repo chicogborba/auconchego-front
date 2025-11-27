@@ -22,7 +22,10 @@ function mapBackendToFrontend(b: BackendPet) {
             b.doencaCronica ? 'Doença crônica' : '',
             b.status ?? '',
             b.peso ? `${b.peso} kg` : '',
-        ].filter(Boolean),
+        ]
+            .filter(Boolean)
+            .map(tag => typeof tag === 'string' ? tag.trim() : tag)
+            .filter(tag => tag && tag.length > 0),
         age: b.idade ?? '',
         size: b.porte
             ? b.porte === 'PEQUENO'
@@ -381,8 +384,15 @@ export async function createAdotante(payload: Record<string, any>) {
         body: JSON.stringify(payload),
     })
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Create adotante failed: ${res.status} ${text}`)
+        let errorMessage = `Erro ao criar adotante (${res.status})`
+        try {
+            const errorData = await res.json()
+            errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+            const text = await res.text()
+            errorMessage = text || errorMessage
+        }
+        throw new Error(errorMessage)
     }
     return res.json()
 }

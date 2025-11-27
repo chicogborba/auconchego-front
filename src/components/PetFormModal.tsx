@@ -155,7 +155,8 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
             setImageUrl(url)
         } catch (err) {
             console.error('Erro ao enviar imagem', err)
-            alert('Não foi possível enviar a imagem. Tente novamente.')
+            // Erro será tratado silenciosamente ou pode adicionar um toast aqui
+            console.error('Erro ao enviar imagem')
         } finally {
             setUploading(false)
         }
@@ -214,7 +215,7 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
             onClose()
         } catch (error) {
             console.error('Erro ao salvar pet:', error)
-            alert('Erro ao salvar pet. Tente novamente.')
+            // Erro será tratado pelo componente pai ou pode adicionar um toast aqui
         } finally {
             setLoading(false)
         }

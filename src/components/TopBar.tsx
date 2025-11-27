@@ -81,37 +81,37 @@ export default function TopBar() {
     }
 
     return (
-        <div className="w-screen flex justify-center">
+        <div className="w-full flex justify-center px-4 py-4">
             <header
-                className={`bg-[#FFBD59] mx-4 my-4 px-6 py-3 shadow-md max-w-5xl w-full transition-all rounded-3xl lg:rounded-full ${
+                className={`bg-[#FFBD59] px-6 py-3 shadow-md max-w-7xl w-full transition-all rounded-3xl lg:rounded-full ${
                     mobileMenuOpen ? 'lg:rounded-3xl' : ''
                 }`}
             >
                 <div className="flex items-center justify-between gap-4">
                     {/* Logo + título */}
-                    <Link to="/main" className="flex items-center gap-3">
+                    <Link to="/main" className="flex items-center gap-3 flex-shrink-0">
                         <img
                             src={logo}
                             alt="Auconchego Logo"
-                            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[#8B6914]"
+                            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[#8B6914] flex-shrink-0"
                         />
-                        <div className="flex flex-col">
-              <span className="font-extrabold text-xl md:text-2xl text-[#5C4A1F]">
-                Auconchego
-              </span>
-                            <span className="text-xs md:text-sm text-[#5C4A1F]/80">
-                adoção com carinho
-              </span>
+                        <div className="flex flex-col justify-center">
+                            <span className="font-extrabold text-xl md:text-2xl text-[#5C4A1F] leading-tight">
+                                Auconchego
+                            </span>
+                            <span className="text-xs md:text-sm text-[#5C4A1F]/80 leading-tight">
+                                adoção com carinho
+                            </span>
                         </div>
                     </Link>
 
                     {/* Menu desktop */}
-                    <nav className="hidden lg:flex items-center gap-4">
+                    <nav className="hidden lg:flex items-center gap-2 flex-1 justify-center">
                         {menuItems.map((item) => (
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`px-3 py-2 rounded-full text-sm md:text-base transition-colors ${
+                                className={`px-3 py-2 rounded-full text-sm md:text-base transition-colors whitespace-nowrap ${
                                     location.pathname === item.path
                                         ? 'bg-white text-[#5C4A1F] font-bold'
                                         : 'text-[#5C4A1F] hover:bg-white/60'
@@ -123,27 +123,27 @@ export default function TopBar() {
                     </nav>
 
                     {/* Lado direito */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-shrink-0">
                         {/* Info usuário */}
                         {currentUser ? (
                             <div className="hidden md:flex flex-col items-end text-xs md:text-sm">
-                <span className="text-[#5C4A1F] font-semibold">
-                  {currentUser.nome ?? currentUser.email}
-                </span>
-                                <span className="text-[#5C4A1F]/80">
-                  {currentUser.role.toLowerCase()}
-                </span>
+                                <span className="text-[#5C4A1F] font-semibold leading-tight">
+                                    {currentUser.nome ?? currentUser.email}
+                                </span>
+                                <span className="text-[#5C4A1F]/80 leading-tight">
+                                    {currentUser.role.toLowerCase()}
+                                </span>
                                 <button
                                     type="button"
                                     onClick={handleLogout}
-                                    className="text-red-700 text-[11px] mt-1 hover:underline"
+                                    className="text-red-700 text-[11px] mt-1 hover:underline leading-tight"
                                 >
                                     sair
                                 </button>
                             </div>
                         ) : (
                             <Link to="/" title="Login">
-                                <div className="hidden md:flex rounded-full w-10 h-10 md:w-11 md:h-11 bg-white/80 border-2 border-[#8B6914] items-center justify-center cursor-pointer hover:bg-white">
+                                <div className="hidden md:flex rounded-full w-10 h-10 md:w-11 md:h-11 bg-white/80 border-2 border-[#8B6914] items-center justify-center cursor-pointer hover:bg-white flex-shrink-0">
                                     <User className="w-5 h-5 md:w-6 md:h-6 text-[#8B6914]" />
                                 </div>
                             </Link>
@@ -152,7 +152,7 @@ export default function TopBar() {
                         {/* Botão menu mobile */}
                         <button
                             onClick={() => setMobileMenuOpen((open) => !open)}
-                            className="lg:hidden rounded-full w-10 h-10 bg-white/80 border-2 border-[#8B6914] flex items-center justify-center cursor-pointer"
+                            className="lg:hidden rounded-full w-10 h-10 bg-white/80 border-2 border-[#8B6914] flex items-center justify-center cursor-pointer flex-shrink-0"
                         >
                             {mobileMenuOpen ? (
                                 <X className="w-5 h-5 text-[#8B6914]" />
@@ -183,21 +183,21 @@ export default function TopBar() {
 
                         <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#5C4A1F]/20 pt-3">
                             <div className="flex items-center gap-2">
-                                <div className="rounded-full w-9 h-9 bg-white/80 border-2 border-[#8B6914] flex items-center justify-center">
+                                <div className="rounded-full w-9 h-9 bg-white/80 border-2 border-[#8B6914] flex items-center justify-center flex-shrink-0">
                                     <User className="w-5 h-5 text-[#8B6914]" />
                                 </div>
                                 <div className="flex flex-col text-xs">
                                     {currentUser ? (
                                         <>
-                      <span className="text-[#5C4A1F] font-semibold">
-                        {currentUser.nome ?? currentUser.email}
-                      </span>
-                                            <span className="text-[#5C4A1F]/80">
-                        {currentUser.role.toLowerCase()}
-                      </span>
+                                            <span className="text-[#5C4A1F] font-semibold leading-tight">
+                                                {currentUser.nome ?? currentUser.email}
+                                            </span>
+                                            <span className="text-[#5C4A1F]/80 leading-tight">
+                                                {currentUser.role.toLowerCase()}
+                                            </span>
                                         </>
                                     ) : (
-                                        <span className="text-[#5C4A1F]/80">Não autenticado</span>
+                                        <span className="text-[#5C4A1F]/80 leading-tight">Não autenticado</span>
                                     )}
                                 </div>
                             </div>
@@ -206,7 +206,7 @@ export default function TopBar() {
                                 <button
                                     type="button"
                                     onClick={handleLogout}
-                                    className="text-xs text-red-700 hover:underline"
+                                    className="text-xs text-red-700 hover:underline flex-shrink-0"
                                 >
                                     sair
                                 </button>
@@ -214,7 +214,7 @@ export default function TopBar() {
                                 <Link
                                     to="/"
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className="text-xs text-[#5C4A1F] hover:underline"
+                                    className="text-xs text-[#5C4A1F] hover:underline flex-shrink-0"
                                 >
                                     entrar
                                 </Link>

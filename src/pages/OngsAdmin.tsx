@@ -5,11 +5,36 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import OngFormModal from '@/components/OngFormModal'
 import * as api from '@/lib/api'
+import AlertModal from '@/components/AlertModal'
+import { useAlert } from '@/hooks/useAlert'
+
+type Role = 'ADOTANTE' | 'TUTOR' | 'ONG' | 'ROOT'
+
+interface CurrentUser {
+  id: number
+  role: Role
+  nome?: string
+  email?: string
+  idOng?: number
+}
+
+function readCurrentUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem('currentUser')
+    if (!raw) return null
+    return JSON.parse(raw) as CurrentUser
+  } catch {
+    return null
+  }
+}
 
 export default function OngsAdmin() {
+  const { alert, showAlert, closeAlert } = useAlert()
   const [ongs, setOngs] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ongId: number | null }>({ isOpen: false, ongId: null })
 
   const fetchOngs = async () => {
     try {
@@ -22,6 +47,16 @@ export default function OngsAdmin() {
   }
 
   useEffect(() => {
+    const user = readCurrentUser()
+    
+    // Verifica se o usuário tem permissão (apenas ROOT)
+    if (!user || user.role !== 'ROOT') {
+      showAlert('Acesso negado', 'Apenas administradores podem acessar esta área.', 'error', () => {
+        window.location.href = '/main'
+      })
+      return
+    }
+    
     fetchOngs()
   }, [])
 
@@ -35,14 +70,20 @@ export default function OngsAdmin() {
     setIsModalOpen(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Tem certeza que deseja deletar esta ONG?')) return
+  const handleDelete = (id: number) => {
+    setDeleteConfirm({ isOpen: true, ongId: id })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.ongId) return
     try {
-      await api.deleteOng(id)
+      await api.deleteOng(deleteConfirm.ongId)
+      setDeleteConfirm({ isOpen: false, ongId: null })
       await fetchOngs()
+      showAlert('ONG deletada', 'ONG deletada com sucesso!', 'success')
     } catch (err) {
       console.error('Failed to delete ONG', err)
-      alert('Erro ao deletar ONG')
+      showAlert('Erro', 'Erro ao deletar ONG', 'error')
     }
   }
 
@@ -133,6 +174,28 @@ export default function OngsAdmin() {
       </div>
 
       <OngFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} ong={editing} onSaved={handleSaved} />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        onConfirm={alert.onConfirm}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <AlertModal
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, ongId: null })}
+        title="Confirmar exclusão"
+        message="Tem certeza que deseja deletar esta ONG? Esta ação não pode ser desfeita."
+        type="warning"
+        onConfirm={confirmDelete}
+        confirmText="Deletar"
+        showCancel={true}
+      />
     </div>
   )
 }

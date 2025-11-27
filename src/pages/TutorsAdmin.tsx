@@ -5,11 +5,36 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import TutorFormModal from '@/components/TutorFormModal'
 import * as api from '@/lib/api'
+import AlertModal from '@/components/AlertModal'
+import { useAlert } from '@/hooks/useAlert'
+
+type Role = 'ADOTANTE' | 'TUTOR' | 'ONG' | 'ROOT'
+
+interface CurrentUser {
+  id: number
+  role: Role
+  nome?: string
+  email?: string
+  idOng?: number
+}
+
+function readCurrentUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem('currentUser')
+    if (!raw) return null
+    return JSON.parse(raw) as CurrentUser
+  } catch {
+    return null
+  }
+}
 
 export default function TutorsAdmin() {
+  const { alert, showAlert, closeAlert } = useAlert()
   const [tutors, setTutors] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; tutorId: number | null }>({ isOpen: false, tutorId: null })
 
   const fetchTutors = async () => {
     try {
@@ -21,20 +46,38 @@ export default function TutorsAdmin() {
     }
   }
 
-  useEffect(() => { fetchTutors() }, [])
+  useEffect(() => {
+    const user = readCurrentUser()
+    
+    // Verifica se o usuário tem permissão (apenas ROOT)
+    if (!user || user.role !== 'ROOT') {
+      showAlert('Acesso negado', 'Apenas administradores podem acessar esta área.', 'error', () => {
+        window.location.href = '/main'
+      })
+      return
+    }
+    
+    fetchTutors()
+  }, [])
 
   const handleAdd = () => { setEditing(null); setIsModalOpen(true) }
   const handleEdit = (t: any) => { setEditing(t); setIsModalOpen(true) }
   const handleSaved = async () => { await fetchTutors() }
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Tem certeza que deseja deletar este tutor?')) return
+  const handleDelete = (id: number) => {
+    setDeleteConfirm({ isOpen: true, tutorId: id })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.tutorId) return
     try {
-      await api.deleteTutor(id)
+      await api.deleteTutor(deleteConfirm.tutorId)
+      setDeleteConfirm({ isOpen: false, tutorId: null })
       await fetchTutors()
+      showAlert('Tutor deletado', 'Tutor deletado com sucesso!', 'success')
     } catch (err) {
       console.error('Failed to delete tutor', err)
-      alert('Erro ao deletar tutor')
+      showAlert('Erro', 'Erro ao deletar tutor', 'error')
     }
   }
 
@@ -80,6 +123,28 @@ export default function TutorsAdmin() {
       </div>
 
       <TutorFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} tutor={editing} onSaved={handleSaved} />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alert.isOpen}
+        onClose={closeAlert}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        onConfirm={alert.onConfirm}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <AlertModal
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, tutorId: null })}
+        title="Confirmar exclusão"
+        message="Tem certeza que deseja deletar este tutor? Esta ação não pode ser desfeita."
+        type="warning"
+        onConfirm={confirmDelete}
+        confirmText="Deletar"
+        showCancel={true}
+      />
     </div>
   )
 }

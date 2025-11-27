@@ -7,6 +7,8 @@ import { Plus, Pencil, Trash2, Cat, Dog, Check, X } from 'lucide-react'
 import PetFormModal from '@/components/PetFormModal'
 import type { Pet } from '@/data/petsData'
 import * as api from '@/lib/api'
+import AlertModal from '@/components/AlertModal'
+import { useAlert } from '@/hooks/useAlert'
 
 type Role = 'ADOTANTE' | 'TUTOR' | 'ONG' | 'ROOT'
 
@@ -63,9 +65,11 @@ function formatPetStatus(status?: string): string {
 
 export default function PetsAdmin() {
     const { pets, deletePet } = usePets()
+    const { alert, showAlert, closeAlert } = useAlert()
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingPet, setEditingPet] = useState<Pet | null>(null)
     const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; petId: number | null }>({ isOpen: false, petId: null })
 
     const [adoptionByPet, setAdoptionByPet] = useState<
         Record<number, AdoptionRequestWithAdopter[]>
@@ -73,18 +77,29 @@ export default function PetsAdmin() {
     const [loadingRequests, setLoadingRequests] = useState(false)
 
     useEffect(() => {
-        setCurrentUser(readCurrentUser())
+        const user = readCurrentUser()
+        setCurrentUser(user)
+        
+        // Verifica se o usuário tem permissão para acessar esta página
+        if (!user || (user.role !== 'TUTOR' && user.role !== 'ONG' && user.role !== 'ROOT')) {
+            showAlert('Acesso negado', 'Apenas tutores, ONGs e administradores podem acessar esta área.', 'error', () => {
+                window.location.href = '/main'
+            })
+        }
     }, [])
 
     const handleDelete = (id: number) => {
-        if (window.confirm('Tem certeza que deseja deletar este pet?')) {
-            ;(async () => {
-                try {
-                    await deletePet(id)
-                } catch (e) {
-                    alert('Erro ao deletar pet')
-                }
-            })()
+        setDeleteConfirm({ isOpen: true, petId: id })
+    }
+
+    const confirmDelete = async () => {
+        if (!deleteConfirm.petId) return
+        try {
+            await deletePet(deleteConfirm.petId)
+            setDeleteConfirm({ isOpen: false, petId: null })
+            showAlert('Pet deletado', 'Pet deletado com sucesso!', 'success')
+        } catch (e) {
+            showAlert('Erro', 'Erro ao deletar pet', 'error')
         }
     }
 
@@ -163,62 +178,70 @@ export default function PetsAdmin() {
         })()
     }, [currentUser])
 
+    const [approveConfirm, setApproveConfirm] = useState<{ isOpen: boolean; requestId: number | null; petId: number | null }>({ isOpen: false, requestId: null, petId: null })
+
     const handleApprove = (requestId: number, petId: number) => {
         if (!currentUser || (currentUser.role !== 'TUTOR' && currentUser.role !== 'ONG')) {
-            alert('Apenas tutor ou ONG podem aprovar pedidos.')
+            showAlert('Acesso negado', 'Apenas tutor ou ONG podem aprovar pedidos.', 'warning')
             return
         }
 
-        if (!window.confirm('Aprovar este pedido de adoção? Isso marcará o pet como ADOTADO.')) {
-            return
-        }
-
-        ;(async () => {
-            try {
-                await api.approveAdoptionRequest(requestId, {
-                    responderId: currentUser.id,
-                    responderType: currentUser.role === 'TUTOR' ? 'TUTOR' : 'ONG',
-                })
-                alert('Pedido aprovado com sucesso!')
-
-                // mais simples: recarregar página pra atualizar status do pet
-                window.location.reload()
-            } catch (e) {
-                console.error('Erro ao aprovar pedido:', e)
-                alert('Não foi possível aprovar o pedido.')
-            }
-        })()
+        setApproveConfirm({ isOpen: true, requestId, petId })
     }
+
+    const confirmApprove = async () => {
+        if (!approveConfirm.requestId || !currentUser) return
+        try {
+            await api.approveAdoptionRequest(approveConfirm.requestId, {
+                responderId: currentUser.id,
+                responderType: currentUser.role === 'TUTOR' ? 'TUTOR' : 'ONG',
+            })
+            setApproveConfirm({ isOpen: false, requestId: null, petId: null })
+            showAlert('Pedido aprovado!', 'Pedido aprovado com sucesso!', 'success', () => {
+                window.location.reload()
+            })
+        } catch (e) {
+            console.error('Erro ao aprovar pedido:', e)
+            showAlert('Erro', 'Não foi possível aprovar o pedido.', 'error')
+        }
+    }
+
+    const [rejectModal, setRejectModal] = useState<{ isOpen: boolean; requestId: number | null; petId: number | null; reason: string }>({ isOpen: false, requestId: null, petId: null, reason: '' })
 
     const handleReject = (requestId: number, petId: number) => {
         if (!currentUser || (currentUser.role !== 'TUTOR' && currentUser.role !== 'ONG')) {
-            alert('Apenas tutor ou ONG podem rejeitar pedidos.')
+            showAlert('Acesso negado', 'Apenas tutor ou ONG podem rejeitar pedidos.', 'warning')
             return
         }
 
-        const reason = window.prompt('Motivo da rejeição (opcional):') ?? undefined
+        setRejectModal({ isOpen: true, requestId, petId, reason: '' })
+    }
 
-        ;(async () => {
-            try {
-                await api.rejectAdoptionRequest(requestId, {
-                    responderId: currentUser.id,
-                    responderType: currentUser.role === 'TUTOR' ? 'TUTOR' : 'ONG',
-                    reason,
-                })
-                alert('Pedido rejeitado.')
+    const confirmReject = async () => {
+        if (!rejectModal.requestId || !currentUser) return
+        try {
+            await api.rejectAdoptionRequest(rejectModal.requestId, {
+                responderId: currentUser.id,
+                responderType: currentUser.role === 'TUTOR' ? 'TUTOR' : 'ONG',
+                reason: rejectModal.reason || undefined,
+            })
+            const petId = rejectModal.petId
+            setRejectModal({ isOpen: false, requestId: null, petId: null, reason: '' })
+            showAlert('Pedido rejeitado', 'Pedido rejeitado com sucesso.', 'success')
 
-                // atualiza apenas a lista local
+            // atualiza apenas a lista local
+            if (petId) {
                 setAdoptionByPet(prev => {
                     const copy = { ...prev }
                     const list = copy[petId] || []
-                    copy[petId] = list.filter(r => r.id !== requestId)
+                    copy[petId] = list.filter(r => r.id !== rejectModal.requestId)
                     return copy
                 })
-            } catch (e) {
-                console.error('Erro ao rejeitar pedido:', e)
-                alert('Não foi possível rejeitar o pedido.')
             }
-        })()
+        } catch (e) {
+            console.error('Erro ao rejeitar pedido:', e)
+            showAlert('Erro', 'Não foi possível rejeitar o pedido.', 'error')
+        }
     }
 
     return (
@@ -321,14 +344,19 @@ export default function PetsAdmin() {
                                                 {pet.description}
                                             </p>
                                             <div className="flex flex-wrap gap-2">
-                                                {pet.tags.map((tag: string, index: number) => (
-                                                    <span
-                                                        key={index}
-                                                        className="bg-[#FFF1BA] text-[#5C4A1F] px-3 py-1 rounded-full text-sm font-medium border border-[#5C4A1F]/20"
-                                                    >
-                            {tag}
-                          </span>
-                                                ))}
+                                                {pet.tags
+                                                    .filter((tag: string) => tag && tag.trim().length > 0)
+                                                    .map((tag: string, index: number) => {
+                                                        const trimmedTag = tag.trim()
+                                                        return (
+                                                            <span
+                                                                key={index}
+                                                                className="bg-[#FFF1BA] text-[#5C4A1F] px-3 py-1 rounded-full text-sm font-medium border border-[#5C4A1F]/20 whitespace-nowrap"
+                                                            >
+                                                                {trimmedTag}
+                                                            </span>
+                                                        )
+                                                    })}
                                             </div>
                                             <div className="mt-2 text-[#8B6914] text-sm space-y-1">
                                                 <p>
@@ -464,6 +492,83 @@ export default function PetsAdmin() {
                 onClose={handleCloseModal}
                 pet={editingPet}
             />
+
+            {/* Alert Modal */}
+            <AlertModal
+                isOpen={alert.isOpen}
+                onClose={closeAlert}
+                title={alert.title}
+                message={alert.message}
+                type={alert.type}
+                onConfirm={alert.onConfirm}
+            />
+
+            {/* Delete Confirmation Modal */}
+            <AlertModal
+                isOpen={deleteConfirm.isOpen}
+                onClose={() => setDeleteConfirm({ isOpen: false, petId: null })}
+                title="Confirmar exclusão"
+                message="Tem certeza que deseja deletar este pet? Esta ação não pode ser desfeita."
+                type="warning"
+                onConfirm={confirmDelete}
+                confirmText="Deletar"
+                showCancel={true}
+            />
+
+            {/* Approve Confirmation Modal */}
+            <AlertModal
+                isOpen={approveConfirm.isOpen}
+                onClose={() => setApproveConfirm({ isOpen: false, requestId: null, petId: null })}
+                title="Aprovar pedido"
+                message="Aprovar este pedido de adoção? Isso marcará o pet como ADOTADO."
+                type="info"
+                onConfirm={confirmApprove}
+                confirmText="Aprovar"
+                showCancel={true}
+            />
+
+            {/* Reject Modal */}
+            {rejectModal.isOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-3xl max-w-md w-full shadow-2xl">
+                        <div className="bg-[#FFBD59] p-6 rounded-t-3xl border-b-2 border-[#5C4A1F] flex items-center justify-between">
+                            <h3 className="text-2xl font-bold text-[#5C4A1F]">Rejeitar Pedido</h3>
+                            <button
+                                onClick={() => setRejectModal({ isOpen: false, requestId: null, petId: null, reason: '' })}
+                                className="p-2 text-[#5C4A1F] hover:bg-[#F5B563] rounded-full transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-sm font-semibold text-[#5C4A1F] mb-2">
+                                Motivo da rejeição (opcional)
+                            </label>
+                            <textarea
+                                value={rejectModal.reason}
+                                onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+                                className="w-full h-24 bg-white border-2 border-[#5C4A1F] rounded-xl p-3 text-[#5C4A1F] text-sm focus:ring-2 focus:ring-[#F5B563] focus:border-[#F5B563] transition-all mb-4"
+                                placeholder="Digite o motivo da rejeição..."
+                            />
+                            <div className="flex justify-end gap-3">
+                                <Button
+                                    onClick={() => setRejectModal({ isOpen: false, requestId: null, petId: null, reason: '' })}
+                                    variant="outline"
+                                    className="bg-[#FFF1BA] hover:bg-[#F5E6C3] text-[#5C4A1F] font-semibold rounded-xl border-2 border-[#5C4A1F] px-6 py-2"
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={confirmReject}
+                                    className="bg-[#FFBD59] hover:bg-[#F5B563] text-[#5C4A1F] font-bold rounded-xl border-2 border-[#5C4A1F] px-6 py-2 shadow-md hover:shadow-lg transition-all"
+                                >
+                                    Rejeitar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

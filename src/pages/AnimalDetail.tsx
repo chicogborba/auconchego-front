@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Heart, MapPin, Calendar, Ruler, Weight, Syringe, Scissors, Sparkles, Cat, Dog } from 'lucide-react'
 import { usePets } from '@/contexts/PetsContext'
 import * as api from '@/lib/api'
+import AlertModal from '@/components/AlertModal'
 
 export default function AnimalDetail() {
   const { id } = useParams()
@@ -14,6 +15,18 @@ export default function AnimalDetail() {
   const [selectedImage, setSelectedImage] = useState(0)
   const { getPetById } = usePets()
   const [pet, setPet] = useState<any | null>(null)
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type: 'info' | 'success' | 'error' | 'warning'
+    onConfirm?: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  })
 
   useEffect(() => {
     let mounted = true
@@ -55,7 +68,12 @@ export default function AnimalDetail() {
             try {
                 const rawUser = localStorage.getItem('currentUser')
                 if (!rawUser) {
-                    alert('Você precisa estar logado como adotante para solicitar adoção.')
+                    setAlertModal({
+                        isOpen: true,
+                        title: 'Login Necessário',
+                        message: 'Você precisa estar logado como adotante para solicitar adoção.',
+                        type: 'info',
+                    })
                     return
                 }
 
@@ -71,7 +89,12 @@ export default function AnimalDetail() {
 
                 // 🔒 Se não for ADOTANTE, tchau
                 if (!adotanteId) {
-                    alert('Somente adotantes podem solicitar adoção.')
+                    setAlertModal({
+                        isOpen: true,
+                        title: 'Acesso Restrito',
+                        message: 'Somente adotantes podem solicitar adoção.',
+                        type: 'warning',
+                    })
                     return
                 }
 
@@ -81,13 +104,21 @@ export default function AnimalDetail() {
                     'Gostaria de adotar este pet',
                 )
 
-                alert(
-                    `Pedido de adoção para ${pet.name} enviado! Agora o tutor/ONG precisa aprovar.`,
-                )
-                navigate('/main')
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Pedido Enviado!',
+                    message: `Pedido de adoção para ${pet.name} enviado! Agora o tutor/ONG precisa aprovar.`,
+                    type: 'success',
+                    onConfirm: () => navigate('/main'),
+                })
             } catch (err) {
                 console.error('Erro ao solicitar adoção', err)
-                alert('Não foi possível enviar o pedido. Tente novamente.')
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Erro',
+                    message: 'Não foi possível enviar o pedido. Tente novamente.',
+                    type: 'error',
+                })
             }
         })()
     }
@@ -188,14 +219,19 @@ export default function AnimalDetail() {
                 <h1 className="text-6xl font-bold text-[#5C4A1F] leading-tight">{pet.name}</h1>
               </div>
               <div className="flex flex-wrap gap-3">
-                {pet.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="px-5 py-3 bg-[#FFBD59] border-2 border-[#5C4A1F] rounded-full text-base font-bold text-[#5C4A1F] shadow-md"
-                  >
-                    {tag}
-                  </span>
-                ))}
+                {pet.tags
+                    .filter(tag => tag && tag.trim().length > 0)
+                    .map((tag, index) => {
+                        const trimmedTag = tag.trim()
+                        return (
+                            <span
+                                key={index}
+                                className="px-4 py-2 bg-[#FFBD59] border-2 border-[#5C4A1F] rounded-full text-base font-bold text-[#5C4A1F] shadow-md whitespace-nowrap"
+                            >
+                                {trimmedTag}
+                            </span>
+                        )
+                    })}
               </div>
             </div>
 
@@ -227,14 +263,19 @@ export default function AnimalDetail() {
                   <h3 className="text-3xl font-bold text-[#5C4A1F]">Temperamento</h3>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  {pet.temperament.map((trait, index) => (
-                    <span
-                      key={index}
-                      className="px-5 py-3 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-full text-base font-bold text-[#5C4A1F] shadow-md hover:bg-[#FFBD59] transition-colors"
-                    >
-                      {trait}
-                    </span>
-                  ))}
+                  {pet.temperament
+                      .filter(trait => trait && trait.trim().length > 0)
+                      .map((trait, index) => {
+                          const trimmedTrait = trait.trim()
+                          return (
+                              <span
+                                  key={index}
+                                  className="px-4 py-2 bg-[#F5E6C3] border-2 border-[#5C4A1F] rounded-full text-base font-bold text-[#5C4A1F] shadow-md hover:bg-[#FFBD59] transition-colors whitespace-nowrap"
+                              >
+                                  {trimmedTrait}
+                              </span>
+                          )
+                      })}
                 </div>
               </CardContent>
             </Card>
@@ -295,6 +336,16 @@ export default function AnimalDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+        onConfirm={alertModal.onConfirm}
+      />
     </div>
   )
 }
