@@ -182,8 +182,8 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                 necessidadesEspeciais: !!formData.necessidadesEspeciais,
                 tratamentoContinuo: !!formData.tratamentoContinuo,
                 doencaCronica: !!formData.doencaCronica,
-                idTutorOrigem: formData.idTutorOrigem,
-                idTutorAdotante: formData.idTutorAdotante,
+                tutorId: formData.idTutorOrigem,
+                adotanteId: formData.idTutorAdotante,
                 idOng: formData.idOng ?? undefined,
 
                 // 👇 NOVOS CAMPOS

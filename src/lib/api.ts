@@ -52,7 +52,8 @@ function mapBackendToFrontend(b: BackendPet) {
                 : [],
         healthStatus: b.descricaoSaude ?? '',
 
-        idTutorOrigem: b.idTutorOrigem ?? null,
+        tutorId: b.tutorId ?? null,
+        adopterId: b.adotanteId ?? null,
         idOng: b.idOng ?? null,
         status: b.status ?? '',
     }
@@ -109,8 +110,8 @@ export async function createPet(payload: Record<string, any>) {
         descricaoSaude: payload.descricaoSaude ?? payload.healthStatus ?? undefined,
         dataResgate: payload.dataResgate ? new Date(payload.dataResgate).toISOString() : undefined,
         status: payload.status ?? undefined,
-        idTutorOrigem: payload.idTutorOrigem ?? undefined,
-        idTutorAdotante: payload.idTutorAdotante ?? undefined,
+        tutorId: payload.tutorId ?? undefined,
+        adotanteId: payload.adotanteId ?? undefined,
     }
 
     // ---- NOVOS CAMPOS DO SCHEMA ----
@@ -228,8 +229,8 @@ export async function updatePet(id: number, payload: Record<string, any>) {
         body.dataResgate = new Date(payload.dataResgate).toISOString()
     }
     if (typeof payload.status !== 'undefined') body.status = payload.status
-    if (typeof payload.idTutorOrigem !== 'undefined') body.idTutorOrigem = payload.idTutorOrigem
-    if (typeof payload.idTutorAdotante !== 'undefined') body.idTutorAdotante = payload.idTutorAdotante
+    if (typeof payload.tutorId !== 'undefined') body.tutorId = payload.tutorId
+    if (typeof payload.adotanteId !== 'undefined') body.adotanteId = payload.adotanteId
 
     // ---- NOVOS CAMPOS DO SCHEMA ----
     if (typeof payload.idade !== 'undefined' && payload.idade !== '') {
@@ -582,6 +583,11 @@ export async function createLocationEntry(data: Partial<LocationHistoryEntry>) {
     return res.json()
 }
 
+// 🔁 Alias mais semântico para o resto do front
+export async function createLocationHistory(data: Partial<LocationHistoryEntry>) {
+    return createLocationEntry(data)
+}
+
 // PUT /historico-localizacao/:id
 export async function updateLocationEntry(id: number, data: Partial<LocationHistoryEntry>) {
     const res = await fetch(`${API_BASE}/historico-localizacao/${id}`, {
@@ -778,6 +784,7 @@ export default {
     getMyAdopted,
     getLocationHistoryByPet,
     createLocationEntry,
+    createLocationHistory,
     updateLocationEntry,
     deleteLocationEntry,
     getAllVisits,

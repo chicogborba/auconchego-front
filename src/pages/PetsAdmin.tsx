@@ -126,7 +126,7 @@ export default function PetsAdmin() {
 
         // TUTOR vê só pets em que ele é tutor de origem
         if (currentUser.role === 'TUTOR') {
-            return allPets.filter((p: any) => p.idTutorOrigem === currentUser.id)
+            return allPets.filter((p: any) => p.tutorId === currentUser.id)
         }
 
         // ONG vê só pets da própria ONG
