@@ -205,6 +205,8 @@ export default function PetFormModal({ isOpen, onClose, pet }: PetFormModalProps
                 ;(payload as any).imagens = [imageUrl]
             }
 
+            console.log('PAYLOAD ENVIADO:', payload)
+
 
             if (pet) {
                 await updatePet(pet.id, payload)

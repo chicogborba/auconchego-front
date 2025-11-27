@@ -3,16 +3,22 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3333/api'
 type BackendPet = any
 
 function mapBackendToFrontend(b: BackendPet) {
-    // Map fields from backend Pet to frontend Pet shape used by UI
+    // normaliza imagens vindo do backend
+    let images: string[] = ['/assets/icon.png']
+
+    if (Array.isArray(b.imagens) && b.imagens.length > 0) {
+        images = b.imagens
+    } else if (typeof b.imagens === 'string' && b.imagens.trim() !== '') {
+        // se o back estiver mandando uma string simples em vez de array
+        images = [b.imagens.trim()]
+    }
+
     return {
         id: b.id,
         type: (b.especie || '').toLowerCase().includes('gato') ? 'cat' : 'dog',
         name: b.nome ?? `Pet ${b.id}`,
         description: b.descricao ?? b.descricaoSaude ?? '',
-        images:
-            b.imagens && Array.isArray(b.imagens) && b.imagens.length > 0
-                ? b.imagens
-                : ['/assets/icon.png'],
+        images, // 👉 usa a variável normalizada
         tags: [
             b.porte ?? '',
             b.raca ?? '',
@@ -35,7 +41,6 @@ function mapBackendToFrontend(b: BackendPet) {
                     : 'Grande'
             : '',
         weight: b.peso ?? '',
-        // Prefer local, then ong.endereco, finally empty string
         location: b.local ?? b.ong?.endereco ?? '',
         coordinates: b.coordenadas ?? { lat: 0, lng: 0 },
         address: b.endereco ?? '',
@@ -47,12 +52,12 @@ function mapBackendToFrontend(b: BackendPet) {
                 : [],
         healthStatus: b.descricaoSaude ?? '',
 
-        // 🔥 extras que vamos usar no admin
         idTutorOrigem: b.idTutorOrigem ?? null,
         idOng: b.idOng ?? null,
         status: b.status ?? '',
     }
 }
+
 
 
 /* ========= PETS ========= */
@@ -139,6 +144,13 @@ export async function createPet(payload: Record<string, any>) {
             .split(',')
             .map((t: string) => t.trim())
             .filter(Boolean)
+    }
+
+    // 🔥 NOVO: garantir que imagens do front cheguem no back
+    if (Array.isArray(payload.imagens) && payload.imagens.length > 0) {
+        body.imagens = payload.imagens
+    } else if (typeof payload.imagem === 'string' && payload.imagem.trim() !== '') {
+        body.imagens = [payload.imagem]
     }
 
     // Basic client-side check: nome is required by the backend schema.
@@ -249,6 +261,13 @@ export async function updatePet(id: number, payload: Record<string, any>) {
             .split(',')
             .map((t: string) => t.trim())
             .filter(Boolean)
+    }
+
+    // 🔥 NOVO: mesma regra de imagens no update
+    if (Array.isArray(payload.imagens) && payload.imagens.length > 0) {
+        body.imagens = payload.imagens
+    } else if (typeof payload.imagem === 'string' && payload.imagem.trim() !== '') {
+        body.imagens = [payload.imagem]
     }
 
     const res = await fetch(`${API_BASE}/pets/${id}`, {
